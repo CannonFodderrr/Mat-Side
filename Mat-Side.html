@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Mat Side — Live Score & Record</title>
+  <style>
+    :root {
+      --mat: #1C1F1E;
+      --panel: #25292A;
+      --panelLine: #33383A;
+      --chalk: #F2F0EA;
+      --muted: #8B9290;
+      --red: #C23B22;
+      --redDim: #4A241C;
+      --green: #2F7A4F;
+      --greenDim: #1E3B2C;
+      --gold: #D9A441;
+      --goldDim: #4A3B1D;
+      --safeBottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: var(--mat); color: var(--chalk); font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+    body { display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 12px 8px; background: var(--panel); border-bottom: 1px solid var(--panelLine);
+      flex-shrink: 0;
+    }
+    .brand { font-size: 14px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
+    .top-meta { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.3; }
+    .top-meta strong { color: var(--chalk); }
+
+    .screen { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: calc(16px + var(--safeBottom)); display: none; }
+    .screen.active { display: block; }
+
+    .card {
+      background: var(--panel); border: 1px solid var(--panelLine); border-radius: 10px;
+      padding: 14px; margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--gold); margin-bottom: 10px;
+    }
+    label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .input, .select {
+      width: 100%; padding: 12px; background: var(--mat); color: var(--chalk);
+      border: 1px solid var(--panelLine); border-radius: 8px; font-size: 15px; margin-bottom: 10px; outline: none;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 12px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 800;
+      text-transform: uppercase; cursor: pointer; width: 100%;
+    }
+    .btn + .btn { margin-top: 8px; }
+    .btn-gold { background: var(--gold); color: var(--mat); }
+    .btn-green { background: var(--green); color: var(--chalk); }
+    .btn-red { background: var(--red); color: var(--chalk); }
+    .btn-ghost { background: var(--mat); color: var(--chalk); border: 1px solid var(--panelLine); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn-row .btn { margin-top: 0; }
+    .muted { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .pill {
+      display: inline-block; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 99px;
+      background: var(--goldDim); color: var(--gold); margin-left: 6px;
+    }
+    .rec-pill {
+      background: var(--redDim); color: var(--red); animation: pulse 1.2s ease infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.55; } }
+
+    /* Live screen — full bleed video + overlay */
+    #screen-live {
+      display: none; position: relative; flex-direction: column;
+      padding: 0; overflow: hidden; height: 100%; background: #000;
+    }
+    #screen-live.active { display: flex; }
+
+    .video-wrap {
+      position: absolute; inset: 0; background: #000; z-index: 0;
+    }
+    .video-wrap video {
+      width: 100%; height: 100%; object-fit: cover; object-position: center;
+      display: block; background: #111;
+      /* iOS / Android */
+      transform: translateZ(0);
+    }
+
+    .live-overlay {
+      position: absolute; inset: 0; z-index: 2;
+      display: flex; flex-direction: column;
+      pointer-events: none;
+      background: linear-gradient(to bottom,
+        rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 18%,
+        rgba(0,0,0,0) 40%, rgba(0,0,0,0) 55%,
+        rgba(0,0,0,0.45) 100%);
+    }
+    .live-overlay * { pointer-events: auto; }
+
+    .live-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; padding: 10px 10px 0;
+    }
+    .live-chip {
+      font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px;
+      background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.12);
+      color: var(--chalk); backdrop-filter: blur(6px);
+    }
+    .live-chip.rec { color: #ff6b5a; border-color: rgba(194,59,34,0.5); }
+    .live-chip.period {
+      color: var(--gold); border-color: rgba(217,164,65,0.5); min-width: 48px; text-align: center;
+      font-size: 16px; padding: 8px 12px;
+    }
+    .score-strip {
+      display: flex; justify-content: center; gap: 18px; padding: 6px 10px 8px;
+    }
+    .score-pill {
+      min-width: 72px; text-align: center; padding: 6px 12px; border-radius: 10px;
+      background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.1);
+    }
+    .score-pill .lab { font-size: 9px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .score-pill .num { font-size: 28px; font-weight: 900; font-family: ui-monospace, monospace; line-height: 1.1; }
+    .score-pill.our .num { color: #6ddea0; }
+    .score-pill.opp .num { color: #ff8f7a; }
+
+    .live-spacer { flex: 1; min-height: 8px; pointer-events: none; }
+
+    .live-bottom {
+      padding: 8px 10px calc(10px + var(--safeBottom));
+    }
+    .names-row {
+      display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px;
+      font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.85);
+    }
+    .names-row span { max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pos-label {
+      text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+      color: var(--gold); margin-bottom: 6px; text-transform: uppercase;
+    }
+
+    .ov-grid {
+      display: grid; gap: 6px;
+    }
+    .ov-grid.g2 { grid-template-columns: 1fr 1fr; }
+    .ov-grid.g3 { grid-template-columns: 1fr 1fr 1fr; }
+    .ov-grid.g4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+    .ov-btn {
+      min-height: 48px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(20,24,22,0.82); color: var(--chalk);
+      font-size: 13px; font-weight: 900; text-transform: uppercase;
+      cursor: pointer; backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .ov-btn:active { transform: scale(0.97); }
+    .ov-btn.our { border-color: rgba(47,122,79,0.7); background: rgba(30,59,44,0.88); color: #b8e0c8; }
+    .ov-btn.opp { border-color: rgba(194,59,34,0.7); background: rgba(74,36,28,0.88); color: #f0b4a8; }
+    .ov-btn.gold { border-color: rgba(217,164,65,0.7); background: rgba(74,59,29,0.88); color: var(--gold); }
+    .ov-btn.ghost {
+      border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.55); color: var(--muted);
+      min-height: 40px; font-size: 11px;
+    }
+    .ov-btn.wide { grid-column: 1 / -1; }
+
+    .mini-row { display: flex; gap: 6px; margin-top: 6px; }
+    .mini-row .ov-btn { flex: 1; min-height: 40px; font-size: 11px; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: calc(24px + var(--safeBottom)); transform: translateX(-50%);
+      background: var(--gold); color: var(--mat); font-weight: 800; font-size: 12px;
+      padding: 10px 16px; border-radius: 99px; z-index: 50; display: none; white-space: nowrap;
+      max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <div class="brand">Mat Side</div>
+      <div style="font-size:10px; color:var(--muted);">Live score + record</div>
+    </div>
+    <div class="top-meta" id="top-meta">No season loaded</div>
+  </div>
+
+  <!-- SETUP -->
+  <div id="screen-setup" class="screen active">
+    <div class="card">
+      <div class="card-title">1. Import from Mat Scout</div>
+      <p class="muted" style="margin-bottom:10px;">
+        In Mat Scout → Admin → Season Archive &amp; Storage, tap <strong>Export for Mat Side</strong>.
+        Open that JSON file here to load roster and events.
+      </p>
+      <input type="file" id="sync-file" class="input" accept="application/json,.json" />
+      <div id="sync-status" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2. Match setup</div>
+      <div class="btn-row" style="margin-bottom:12px;">
+        <button type="button" class="btn btn-ghost" id="mode-import-btn" onclick="setSetupMode('import')" style="margin-top:0;">From import</button>
+        <button type="button" class="btn btn-gold" id="mode-custom-btn" onclick="setSetupMode('custom')" style="margin-top:0;">Custom / test</button>
+      </div>
+
+      <div id="setup-import">
+        <label>Event / Bout</label>
+        <select id="sel-bout" class="select" onchange="onBoutChange()">
+          <option value="">— Import season first —</option>
+        </select>
+        <label>Our wrestler</label>
+        <select id="sel-wrestler" class="select">
+          <option value="">— Select —</option>
+        </select>
+      </div>
+
+      <div id="setup-custom" style="display:none;">
+        <p class="muted" style="margin-bottom:10px;">Enter anything to test live scoring — no Mat Scout file required.</p>
+        <label>Team / school (optional)</label>
+        <input id="custom-team" class="input" placeholder="e.g. Scorpions" />
+        <label>Event name</label>
+        <input id="custom-event" class="input" placeholder="e.g. Dual vs Desert Ridge" />
+        <label>Event date</label>
+        <input id="custom-date" type="date" class="input" />
+        <label>Division</label>
+        <select id="custom-division" class="select">
+          <option value="Boys">Boys</option>
+          <option value="Girls">Girls</option>
+          <option value="Both">Both</option>
+        </select>
+        <label>Our wrestler name</label>
+        <input id="custom-wrestler" class="input" placeholder="e.g. Jane Doe" />
+        <label>Weight class</label>
+        <input id="custom-weight" class="input" placeholder="e.g. 132" inputmode="numeric" />
+      </div>
+
+      <label>Opponent name</label>
+      <input id="inp-opponent" class="input" placeholder="Opponent wrestler" list="opp-list" />
+      <datalist id="opp-list"></datalist>
+      <label>Match level</label>
+      <select id="sel-level" class="select">
+        <option value="Varsity">Varsity</option>
+        <option value="JV">JV</option>
+        <option value="Junior High">Junior High</option>
+        <option value="College">College</option>
+        <option value="Exhibition">Exhibition</option>
+      </select>
+      <button type="button" class="btn btn-ghost" onclick="fillDemoCustom()" style="margin-top:4px;">Fill demo test data</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3. Camera</div>
+      <p class="muted" style="margin-bottom:10px;">Uses the rear camera when available. Recording starts when you begin the match.</p>
+      <div class="btn-row">
+        <button class="btn btn-ghost" type="button" onclick="previewCamera()">Preview camera</button>
+        <button class="btn btn-gold" type="button" onclick="startLiveMatch()">Start live match</button>
+      </div>
+      <video id="preview-video" playsinline muted style="width:100%; border-radius:8px; margin-top:10px; background:#000; max-height:200px; display:none;"></video>
+    </div>
+
+    <div class="card">
+      <div class="card-title">About packages</div>
+      <p class="muted">
+        When you end a match, Mat Side builds a package (video + score JSON). Save it to your phone or a shared
+        Google Drive folder, then import into Mat Scout so the coach can add modifiers and technique detail.
+      </p>
+    </div>
+  </div>
+
+  <!-- LIVE -->
+  <div id="screen-live">
+    <div class="video-wrap">
+      <video id="live-video" playsinline webkit-playsinline muted autoplay></video>
+    </div>
+    <div class="live-overlay">
+      <div class="live-top">
+        <div class="live-chip rec" id="rec-badge">● REC 00:00</div>
+        <button type="button" class="live-chip period" id="period-btn" onclick="cyclePeriod()">P1</button>
+        <button type="button" class="live-chip" onclick="undoLastEvent()" title="Undo">UNDO</button>
+      </div>
+      <div class="score-strip">
+        <div class="score-pill our">
+          <div class="lab" id="live-our-name">Us</div>
+          <div class="num" id="live-our-pts">0</div>
+        </div>
+        <div class="score-pill opp">
+          <div class="lab" id="live-opp-name">Opp</div>
+          <div class="num" id="live-opp-pts">0</div>
+        </div>
+      </div>
+      <div class="live-spacer"></div>
+      <div class="live-bottom">
+        <div class="names-row">
+          <span id="live-our-label">Us</span>
+          <span id="live-opp-label" style="text-align:right;">Opp</span>
+        </div>
+        <div class="pos-label" id="pos-label">Neutral</div>
+        <div id="overlay-controls"></div>
+        <div class="mini-row">
+          <button type="button" class="ov-btn ghost" onclick="endLiveMatch()">End</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div id="screen-done" class="screen">
+    <div class="card">
+      <div class="card-title">Match package ready</div>
+      <p class="muted" id="done-summary" style="margin-bottom:12px;"></p>
+      <button class="btn btn-gold" type="button" onclick="downloadPackageJson()">Download score JSON</button>
+      <button class="btn btn-green" type="button" id="btn-download-video" onclick="downloadPackageVideo()">Download video</button>
+      <button class="btn btn-ghost" type="button" onclick="sharePackage()" id="btn-share">Share package files</button>
+      <p class="muted" style="margin-top:12px;">
+        Put both files in a Google Drive folder (or keep on device). In Mat Scout, import the JSON and attach the video on Scout to edit modifiers.
+      </p>
+      <button class="btn btn-ghost" type="button" style="margin-top:12px;" onclick="resetToSetup()">New match / setup</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const MAT_SIDE_BUILD = "2026-09-12-v1";
+    const SYNC_KEY = "mat-side-sync-v1";
+
+    let sync = null; // imported mat-side-sync payload
+    let mediaStream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recording = false;
+    let recordStartedAt = 0;
+    let recTimer = null;
+    let matchStartedAt = 0;
+
+    let live = {
+      boutId: null,
+      wrestlerId: null,
+      wrestlerName: "",
+      opponent: "",
+      level: "Varsity",
+      weightClass: "",
+      period: "P1",
+      events: [],
+      ourP: 0,
+      oppP: 0
+    };
+
+    let lastPackage = null; // { json, videoBlob, videoName }
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.style.display = "none"; }, 2200);
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll(".screen, #screen-live").forEach(el => el.classList.remove("active"));
+      const el = document.getElementById(id);
+      if (el) el.classList.add("active");
+    }
+
+    function formatMmSs(sec) {
+      sec = Math.max(0, Math.floor(sec || 0));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }
+
+    function videoTimestamp() {
+      if (!recordStartedAt) return "00:00";
+      return formatMmSs((Date.now() - recordStartedAt) / 1000);
+    }
+
+    function loadStoredSync() {
+      try {
+        const raw = localStorage.getItem(SYNC_KEY);
+        if (raw) {
+          sync = JSON.parse(raw);
+          applySyncToUI();
+        }
+      } catch (e) {}
+    }
+
+    function saveSync() {
+      try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) {}
+    }
+
+    function applySyncToUI() {
+      const status = document.getElementById("sync-status");
+      const meta = document.getElementById("top-meta");
+      if (!sync || !sync.season) {
+        status.textContent = "";
+        meta.textContent = "No season loaded";
+        return;
+      }
+      status.innerHTML = `<span style="color:var(--green);">Loaded:</span> <strong>${sync.season.name}</strong> · ${(sync.roster||[]).length} athletes · ${(sync.bouts||[]).length} events · ${sync.teamName || ""}`;
+      meta.innerHTML = `<strong>${sync.season.name}</strong><br/>${(sync.roster||[]).length} athletes`;
+
+      const boutSel = document.getElementById("sel-bout");
+      const bouts = (sync.bouts || []).slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
+      boutSel.innerHTML = `<option value="">— Select event —</option>` + bouts.map(b =>
+        `<option value="${b.id}">${b.date || "?"} [${b.type || "Dual"}] vs ${b.opponentTeam || "?"} (${b.division || ""})</option>`
+      ).join("");
+
+      fillWrestlerSelect();
+    }
+
+    function fillWrestlerSelect() {
+      const wSel = document.getElementById("sel-wrestler");
+      const boutId = document.getElementById("sel-bout").value;
+      const bout = (sync && sync.bouts || []).find(b => b.id === boutId);
+      let roster = (sync && sync.roster || []).filter(w => !w.quit);
+      if (bout && bout.division && bout.division !== "Both") {
+        roster = roster.filter(w => w.division === bout.division || !w.division);
+      }
+      roster.sort((a,b) => (Number(a.weightClass)||0) - (Number(b.weightClass)||0));
+      wSel.innerHTML = `<option value="">— Select wrestler —</option>` + roster.map(w =>
+        `<option value="${w.id}">${w.weightClass || "?"} — ${w.name} (${w.level || ""})</option>`
+      ).join("");
+
+      const dl = document.getElementById("opp-list");
+      dl.innerHTML = "";
+      if (bout && bout.opponentRoster) {
+        bout.opponentRoster.forEach(o => {
+          const opt = document.createElement("option");
+          opt.value = o.name || "";
+          dl.appendChild(opt);
+        });
+      }
+    }
+
+    function onBoutChange() {
+      fillWrestlerSelect();
+      const boutId = document.getElementById("sel-bout").value;
+      const bout = (sync && sync.bouts || []).find(b => b.id === boutId);
+      if (bout && bout.competitionLevel) {
+        const lvl = document.getElementById("sel-level");
+        if ([...lvl.options].some(o => o.value === bout.competitionLevel)) lvl.value = bout.competitionLevel;
+      }
+    }
+
+    document.getElementById("sync-file").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.type !== "mat-side-sync" && !(data.season && data.roster)) {
+          // Accept full Mat Scout backup / season archive loosely
+          if (data.store && data.store.seasons) {
+            const s = data.store.seasons.find(x => x.id === data.store.activeSeasonId) || data.store.seasons[0];
+            sync = {
+              type: "mat-side-sync",
+              version: 1,
+              teamName: (data.branding && data.branding.teamName) || "",
+              season: { id: s.id, name: s.name, style: s.style || "Folkstyle" },
+              roster: s.roster || [],
+              bouts: s.bouts || []
+            };
+          } else if (data.season && data.season.roster) {
+            sync = {
+              type: "mat-side-sync",
+              version: 1,
+              teamName: "",
+              season: { id: data.season.id, name: data.season.name, style: data.season.style || "Folkstyle" },
+              roster: data.season.roster || [],
+              bouts: data.season.bouts || []
+            };
+          } else {
+            throw new Error("Not a Mat Side sync or Mat Scout export file.");
+          }
+        } else {
+          sync = data;
+        }
+        saveSync();
+        applySyncToUI();
+        toast("Season imported");
+      } catch (err) {
+        alert("Could not import: " + (err.message || err));
+      }
+    });
+
+    async function getCameraStream() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API not available (use HTTPS or localhost).");
+      }
+      const attempts = [
+        { audio: true, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+        { audio: true, video: { facingMode: "environment" } },
+        { audio: true, video: true },
+        { audio: false, video: { facingMode: "environment" } },
+        { audio: false, video: true }
+      ];
+      let lastErr = null;
+      for (const constraints of attempts) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+          return mediaStream;
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error("Could not open camera");
+    }
+
+    async function previewCamera() {
+      try {
+        const stream = await getCameraStream();
+        const v = document.getElementById("preview-video");
+        v.srcObject = stream;
+        v.style.display = "block";
+        await v.play();
+        toast("Camera ready");
+      } catch (err) {
+        alert("Camera permission needed: " + (err.message || err));
+      }
+    }
+
+    function pickMimeType() {
+      const types = [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+        "video/mp4"
+      ];
+      for (const t of types) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return "";
+    }
+
+    let setupMode = "custom"; // custom | import — default custom for easy testing
+
+    function setSetupMode(mode) {
+      setupMode = mode === "import" ? "import" : "custom";
+      document.getElementById("setup-import").style.display = setupMode === "import" ? "block" : "none";
+      document.getElementById("setup-custom").style.display = setupMode === "custom" ? "block" : "none";
+      const ib = document.getElementById("mode-import-btn");
+      const cb = document.getElementById("mode-custom-btn");
+      if (ib && cb) {
+        ib.className = "btn " + (setupMode === "import" ? "btn-gold" : "btn-ghost");
+        cb.className = "btn " + (setupMode === "custom" ? "btn-gold" : "btn-ghost");
+        ib.style.marginTop = "0";
+        cb.style.marginTop = "0";
+      }
+      const meta = document.getElementById("top-meta");
+      if (setupMode === "custom") {
+        meta.innerHTML = "<strong>Custom / test</strong><br/>manual entry";
+      } else if (sync && sync.season) {
+        meta.innerHTML = `<strong>${sync.season.name}</strong><br/>${(sync.roster||[]).length} athletes`;
+      }
+    }
+
+    function fillDemoCustom() {
+      setSetupMode("custom");
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById("custom-team").value = "Test High";
+      document.getElementById("custom-event").value = "Scrimmage Dual vs Demo";
+      document.getElementById("custom-date").value = today;
+      document.getElementById("custom-division").value = "Boys";
+      document.getElementById("custom-wrestler").value = "Alex Test";
+      document.getElementById("custom-weight").value = "132";
+      document.getElementById("inp-opponent").value = "Jordan Opp";
+      document.getElementById("sel-level").value = "Varsity";
+      toast("Demo fields filled");
+    }
+
+    async function startLiveMatch() {
+      const opponent = document.getElementById("inp-opponent").value.trim() || "Opponent";
+      const level = document.getElementById("sel-level").value;
+
+      let boutId, wrestlerId, wrestlerName, weightClass, boutMeta, seasonMeta, teamName;
+
+      if (setupMode === "import") {
+        if (!sync) return alert("Import a Mat Scout season first, or switch to Custom / test.");
+        boutId = document.getElementById("sel-bout").value;
+        wrestlerId = document.getElementById("sel-wrestler").value;
+        if (!boutId) return alert("Select an event.");
+        if (!wrestlerId) return alert("Select our wrestler.");
+        const w = (sync.roster || []).find(r => r.id === wrestlerId);
+        const bout = (sync.bouts || []).find(b => b.id === boutId);
+        wrestlerName = w ? w.name : "Athlete";
+        weightClass = w ? String(w.weightClass || "") : "";
+        boutMeta = bout || null;
+        seasonMeta = sync.season;
+        teamName = sync.teamName || "";
+      } else {
+        wrestlerName = document.getElementById("custom-wrestler").value.trim();
+        weightClass = document.getElementById("custom-weight").value.trim();
+        const eventName = document.getElementById("custom-event").value.trim() || "Test Event";
+        const eventDate = document.getElementById("custom-date").value || new Date().toISOString().slice(0, 10);
+        const division = document.getElementById("custom-division").value || "Boys";
+        teamName = document.getElementById("custom-team").value.trim() || "Test Team";
+        if (!wrestlerName) return alert("Enter our wrestler name (or tap Fill demo test data).");
+        wrestlerId = "custom_" + Math.random().toString(36).slice(2, 8);
+        boutId = "custom_bout_" + Math.random().toString(36).slice(2, 8);
+        boutMeta = {
+          id: boutId,
+          date: eventDate,
+          type: "Dual",
+          division,
+          opponentTeam: eventName,
+          competitionLevel: level
+        };
+        seasonMeta = {
+          id: "custom_season",
+          name: teamName + " — Test",
+          style: "Folkstyle"
+        };
+      }
+
+      live = {
+        boutId,
+        wrestlerId,
+        wrestlerName,
+        opponent,
+        level,
+        weightClass,
+        period: "P1",
+        events: [],
+        ourP: 0,
+        oppP: 0,
+        boutMeta: boutMeta || null,
+        seasonMeta: seasonMeta || null,
+        teamName: teamName || ""
+      };
+
+      resetPositionState();
+
+      try {
+        // Show live screen first so video element is visible/laid out
+        showScreen("screen-live");
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const stream = await getCameraStream();
+        const liveVid = document.getElementById("live-video");
+        liveVid.setAttribute("playsinline", "");
+        liveVid.setAttribute("webkit-playsinline", "");
+        liveVid.muted = true;
+        liveVid.playsInline = true;
+        liveVid.srcObject = stream;
+        // Force play — critical on iOS
+        try { await liveVid.play(); } catch (playErr) {
+          console.warn("video play", playErr);
+          try { await liveVid.play(); } catch (e2) {}
+        }
+
+        recordedChunks = [];
+        const mime = pickMimeType();
+        const recOpts = mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : { videoBitsPerSecond: 2500000 };
+        try {
+          mediaRecorder = new MediaRecorder(stream, recOpts);
+        } catch (e) {
+          mediaRecorder = new MediaRecorder(stream);
+        }
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
+        };
+        mediaRecorder.start(1000);
+        recording = true;
+        recordStartedAt = Date.now();
+        matchStartedAt = Date.now();
+        startRecClock();
+      } catch (err) {
+        if (!confirm("Could not start camera/recording (" + (err.message || err) + ").\n\nScore without video?")) {
+          showScreen("screen-setup");
+          return;
+        }
+        recording = false;
+        recordStartedAt = Date.now();
+        matchStartedAt = Date.now();
+        startRecClock();
+        showScreen("screen-live");
+      }
+
+      document.getElementById("live-our-name").textContent = shortName(live.wrestlerName, "Us");
+      document.getElementById("live-opp-name").textContent = shortName(live.opponent, "Opp");
+      document.getElementById("live-our-label").textContent = live.wrestlerName || "Us";
+      document.getElementById("live-opp-label").textContent = live.opponent || "Opp";
+      document.getElementById("live-our-pts").textContent = "0";
+      document.getElementById("live-opp-pts").textContent = "0";
+      setPeriod("P1");
+      renderOverlayControls();
+      toast("Live match started");
+    }
+
+    function startRecClock() {
+      clearInterval(recTimer);
+      recTimer = setInterval(() => {
+        const t = formatMmSs((Date.now() - recordStartedAt) / 1000);
+        const badge = document.getElementById("rec-badge");
+        if (badge) {
+          badge.textContent = (recording ? "● REC " : "SCORE ") + t;
+        }
+      }, 250);
+    }
+
+    const PERIODS = ["P1", "P2", "P3", "OT"];
+
+    // Position state machine
+    // position: neutral | top_our | top_opp | nf_our | nf_opp
+    // choicePhase: null | pick_wrestler | pick_position | defer_other
+    // choiceFor: 'our' | 'opp' — who is choosing when in choice flow
+
+    function resetPositionState() {
+      live.position = "neutral";
+      live.choicePhase = null;
+      live.choiceFor = null;
+      live.pendingChoice = null;
+    }
+
+    function cyclePeriod() {
+      const idx = PERIODS.indexOf(live.period);
+      const next = PERIODS[(idx < 0 ? 0 : idx + 1) % PERIODS.length];
+      live.period = next;
+      const btn = document.getElementById("period-btn");
+      if (btn) btn.textContent = next;
+      // Period change → choice flow
+      live.choicePhase = "pick_wrestler";
+      live.choiceFor = null;
+      live.pendingChoice = null;
+      // Reset to neutral for new period (choice will set top/bottom/neutral)
+      live.position = "neutral";
+      renderOverlayControls();
+      toast(next + " — choose who has choice");
+    }
+
+    function setPeriod(p) {
+      live.period = p;
+      const btn = document.getElementById("period-btn");
+      if (btn) btn.textContent = p;
+    }
+
+    function chooseWrestler(who) {
+      // who: 'our' | 'opp'
+      live.choiceFor = who;
+      live.choicePhase = "pick_position";
+      renderOverlayControls();
+    }
+
+    function choosePosition(pos) {
+      // pos: top | bottom | neutral | defer
+      const who = live.choiceFor; // our | opp
+      if (pos === "defer") {
+        // other wrestler gets the choice
+        live.choiceFor = who === "our" ? "opp" : "our";
+        live.choicePhase = "pick_position";
+        toast("Deferred — other wrestler chooses");
+        renderOverlayControls();
+        return;
+      }
+      if (pos === "neutral") {
+        live.position = "neutral";
+      } else if (pos === "top") {
+        // chooser starts on top
+        live.position = who === "our" ? "top_our" : "top_opp";
+      } else if (pos === "bottom") {
+        // chooser starts on bottom → other is top
+        live.position = who === "our" ? "top_opp" : "top_our";
+      }
+      live.choicePhase = null;
+      live.choiceFor = null;
+      renderOverlayControls();
+    }
+
+    function addScore(direction, category, move, points, opts) {
+      opts = opts || {};
+      const isPenalty = category === "Penalty/DQ";
+      let ourDelta = 0, oppDelta = 0;
+      if (isPenalty) {
+        if (direction === "offense") oppDelta = points; // we stalled → opp scores
+        else ourDelta = points;
+      } else if (move === "Pin / Fall") {
+        // no board points
+      } else {
+        if (direction === "offense") ourDelta = points;
+        else oppDelta = points;
+      }
+      live.ourP += ourDelta;
+      live.oppP += oppDelta;
+
+      const ev = {
+        id: Math.random().toString(36).slice(2, 9),
+        period: live.period,
+        category,
+        move,
+        direction,
+        outcome: "success",
+        points: isPenalty ? points : (move === "Pin / Fall" ? 0 : (direction === "offense" ? ourDelta : oppDelta)),
+        timestamp: videoTimestamp(),
+        detail: move === "Pin / Fall" ? "Pin / Fall" : (opts.detail || ""),
+        source: "mat-side-live",
+        ts: Date.now()
+      };
+      live.events.push(ev);
+      document.getElementById("live-our-pts").textContent = String(live.ourP);
+      document.getElementById("live-opp-pts").textContent = String(live.oppP);
+
+      // Position transitions after scoring
+      if (!isPenalty && move !== "Pin / Fall") {
+        if (category === "Takedown" || move === "Takedown") {
+          // scorer goes on top
+          live.position = direction === "offense" ? "top_our" : "top_opp";
+        } else if (category === "Escape" || move === "Escape") {
+          live.position = "neutral";
+        } else if (category === "Reversal" || move === "Reversal") {
+          // bottom becomes top
+          live.position = direction === "offense" ? "top_our" : "top_opp";
+        } else if (opts.enterNf) {
+          live.position = direction === "offense" ? "nf_our" : "nf_opp";
+        } else if (opts.nfPoints) {
+          // after awarding NF points, stay on top for that wrestler
+          live.position = direction === "offense" ? "top_our" : "top_opp";
+        }
+      }
+      if (move === "Pin / Fall") toast(direction === "offense" ? "PIN — Us" : "PIN — Opp");
+
+      renderOverlayControls();
+    }
+
+    function undoLastEvent() {
+      const ev = live.events.pop();
+      if (!ev) return toast("Nothing to undo");
+      live.ourP = 0;
+      live.oppP = 0;
+      live.events.forEach(e => {
+        const isPenalty = e.category === "Penalty/DQ";
+        if (isPenalty) {
+          if (e.direction === "offense") live.oppP += e.points || 0;
+          else live.ourP += e.points || 0;
+        } else if (e.move !== "Pin / Fall") {
+          if (e.direction === "offense") live.ourP += e.points || 0;
+          else live.oppP += e.points || 0;
+        }
+      });
+      document.getElementById("live-our-pts").textContent = String(live.ourP);
+      document.getElementById("live-opp-pts").textContent = String(live.oppP);
+      // crude position restore: last non-penalty scoring event
+      live.position = "neutral";
+      for (let i = live.events.length - 1; i >= 0; i--) {
+        const e = live.events[i];
+        if (e.category === "Penalty/DQ") continue;
+        if (e.move === "Pin / Fall") continue;
+        if (e.category === "Takedown" || e.category === "Reversal") {
+          live.position = e.direction === "offense" ? "top_our" : "top_opp";
+          break;
+        }
+        if (e.category === "Escape") {
+          live.position = "neutral";
+          break;
+        }
+        if (/Near Fall|N2|N3|N4|NF/i.test(e.move || "")) {
+          live.position = e.direction === "offense" ? "top_our" : "top_opp";
+          break;
+        }
+      }
+      live.choicePhase = null;
+      renderOverlayControls();
+      toast("Undone");
+    }
+
+    function posLabelText() {
+      if (live.choicePhase === "pick_wrestler") return "Choice — who chooses?";
+      if (live.choicePhase === "pick_position") {
+        const name = live.choiceFor === "our" ? (live.wrestlerName || "Us") : (live.opponent || "Opp");
+        return "Choice — " + name;
+      }
+      switch (live.position) {
+        case "neutral": return "Neutral";
+        case "top_our": return (live.wrestlerName || "Us") + " on top";
+        case "top_opp": return (live.opponent || "Opp") + " on top";
+        case "nf_our": return "Near fall — " + (live.wrestlerName || "Us");
+        case "nf_opp": return "Near fall — " + (live.opponent || "Opp");
+        default: return "";
+      }
+    }
+
+    function renderOverlayControls() {
+      const host = document.getElementById("overlay-controls");
+      const label = document.getElementById("pos-label");
+      if (label) label.textContent = posLabelText();
+      if (!host) return;
+
+      // Choice flows
+      if (live.choicePhase === "pick_wrestler") {
+        host.innerHTML = `
+          <div class="ov-grid g2">
+            <button type="button" class="ov-btn our" onclick="chooseWrestler('our')">${escHtml(shortName(live.wrestlerName, "Us"))}</button>
+            <button type="button" class="ov-btn opp" onclick="chooseWrestler('opp')">${escHtml(shortName(live.opponent, "Opp"))}</button>
+          </div>`;
+        return;
+      }
+      if (live.choicePhase === "pick_position") {
+        host.innerHTML = `
+          <div class="ov-grid g2">
+            <button type="button" class="ov-btn gold" onclick="choosePosition('top')">Top</button>
+            <button type="button" class="ov-btn gold" onclick="choosePosition('bottom')">Bottom</button>
+            <button type="button" class="ov-btn gold" onclick="choosePosition('neutral')">Neutral</button>
+            <button type="button" class="ov-btn ghost" onclick="choosePosition('defer')">Defer</button>
+          </div>`;
+        return;
+      }
+
+      const pos = live.position || "neutral";
+
+      // Near-fall point selection
+      if (pos === "nf_our") {
+        host.innerHTML = `
+          <div class="ov-grid g3">
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})">N2</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})">N3</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})">N4</button>
+          </div>
+          <div class="mini-row">
+            <button type="button" class="ov-btn ghost" onclick="live.position='top_our'; renderOverlayControls()">Cancel NF</button>
+          </div>`;
+        return;
+      }
+      if (pos === "nf_opp") {
+        host.innerHTML = `
+          <div class="ov-grid g3">
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})">N2</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})">N3</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})">N4</button>
+          </div>
+          <div class="mini-row">
+            <button type="button" class="ov-btn ghost" onclick="live.position='top_opp'; renderOverlayControls()">Cancel NF</button>
+          </div>`;
+        return;
+      }
+
+      if (pos === "neutral") {
+        // Only T3 and P per wrestler
+        host.innerHTML = `
+          <div class="ov-grid g2">
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Takedown','Takedown',3)">T3</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Takedown','Takedown',3)">T3</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
+          </div>
+          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
+            <span>Our · T3 / P (opp penalty)</span>
+            <span style="text-align:right;">Opp · T3 / P (our penalty)</span>
+          </div>`;
+        return;
+      }
+
+      if (pos === "top_our") {
+        // Our on top: NF, Pin, P | Bottom (opp): E1, R2, P
+        host.innerHTML = `
+          <div class="ov-grid g2">
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Near Fall',0,{enterNf:1})">NF</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Escape','Escape',1)">E1</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Pin / Fall',0)">PIN</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Reversal','Reversal',2)">R2</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
+          </div>
+          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
+            <span>Top (us) · NF PIN P</span>
+            <span style="text-align:right;">Bottom · E1 R2 P</span>
+          </div>`;
+        return;
+      }
+
+      if (pos === "top_opp") {
+        // Opp on top: NF, Pin, P | Bottom (us): E1, R2, P
+        host.innerHTML = `
+          <div class="ov-grid g2">
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Escape','Escape',1)">E1</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Near Fall',0,{enterNf:1})">NF</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Reversal','Reversal',2)">R2</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Pin / Fall',0)">PIN</button>
+            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
+            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
+          </div>
+          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
+            <span>Bottom (us) · E1 R2 P</span>
+            <span style="text-align:right;">Top · NF PIN P</span>
+          </div>`;
+        return;
+      }
+
+      host.innerHTML = "";
+    }
+
+    function shortName(n, fallback) {
+      n = String(n || fallback || "").trim();
+      if (n.length <= 12) return n || fallback;
+      return n.slice(0, 11) + "…";
+    }
+
+    function escHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    function stopRecorder() {
+      return new Promise((resolve) => {
+        if (!mediaRecorder || mediaRecorder.state === "inactive") {
+          resolve(null);
+          return;
+        }
+        mediaRecorder.onstop = () => {
+          const type = mediaRecorder.mimeType || "video/webm";
+          const blob = recordedChunks.length ? new Blob(recordedChunks, { type }) : null;
+          resolve(blob);
+        };
+        try { mediaRecorder.stop(); } catch (e) { resolve(null); }
+      });
+    }
+
+    async function endLiveMatch() {
+      if (!confirm("End match and build package?")) return;
+      clearInterval(recTimer);
+      const videoBlob = await stopRecorder();
+      recording = false;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+
+      const packageId = Math.random().toString(36).slice(2, 10);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const safeName = (live.wrestlerName || "match").replace(/[^a-z0-9-_]+/gi, "_").slice(0, 24);
+      const json = {
+        type: "mat-side-package",
+        version: 1,
+        packageId,
+        matSideBuild: MAT_SIDE_BUILD,
+        exportedAt: new Date().toISOString(),
+        teamName: live.teamName || (sync && sync.teamName) || "",
+        season: live.seasonMeta || (sync && sync.season) || null,
+        bout: live.boutMeta ? {
+          id: live.boutMeta.id,
+          date: live.boutMeta.date,
+          type: live.boutMeta.type,
+          division: live.boutMeta.division,
+          opponentTeam: live.boutMeta.opponentTeam
+        } : { id: live.boutId },
+        match: {
+          wrestlerId: live.wrestlerId,
+          wrestlerName: live.wrestlerName,
+          opponent: live.opponent,
+          level: live.level,
+          weightClass: live.weightClass,
+          date: dateStr,
+          ourPoints: live.ourP,
+          oppPoints: live.oppP,
+          source: "mat-side-live"
+        },
+        events: live.events.map(e => ({
+          period: e.period,
+          category: e.category,
+          move: e.move,
+          direction: e.direction,
+          outcome: e.outcome,
+          points: e.points,
+          timestamp: e.timestamp,
+          detail: e.detail || "",
+          source: "mat-side-live"
+        })),
+        video: {
+          fileName: "mat-side_" + dateStr + "_" + safeName + (videoBlob && videoBlob.type.includes("mp4") ? ".mp4" : ".webm"),
+          mimeType: videoBlob ? videoBlob.type : null,
+          hasVideo: !!videoBlob
+        },
+        note: "Import this JSON into Mat Scout (future Import Live Package) or manually create match and align events. Attach the video file on Scout for modifier editing."
+      };
+
+      lastPackage = {
+        json,
+        videoBlob,
+        videoName: json.video.fileName,
+        jsonName: "mat-side_" + dateStr + "_" + safeName + ".json"
+      };
+
+      document.getElementById("done-summary").innerHTML =
+        `<strong>${live.wrestlerName}</strong> vs <strong>${live.opponent}</strong><br/>` +
+        `Score ${live.ourP}–${live.oppP} · ${live.events.length} events` +
+        (videoBlob ? ` · video ${(videoBlob.size / (1024*1024)).toFixed(1)} MB` : " · no video");
+
+      document.getElementById("btn-download-video").disabled = !videoBlob;
+      document.getElementById("btn-download-video").style.opacity = videoBlob ? "1" : "0.4";
+
+      showScreen("screen-done");
+      toast("Package ready");
+    }
+
+    function downloadBlob(blob, name) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    function downloadPackageJson() {
+      if (!lastPackage) return;
+      const blob = new Blob([JSON.stringify(lastPackage.json, null, 2)], { type: "application/json" });
+      downloadBlob(blob, lastPackage.jsonName);
+      toast("JSON downloaded");
+    }
+
+    function downloadPackageVideo() {
+      if (!lastPackage || !lastPackage.videoBlob) return alert("No video recorded.");
+      downloadBlob(lastPackage.videoBlob, lastPackage.videoName);
+      toast("Video downloaded");
+    }
+
+    async function sharePackage() {
+      if (!lastPackage) return;
+      const files = [];
+      const jsonBlob = new Blob([JSON.stringify(lastPackage.json, null, 2)], { type: "application/json" });
+      files.push(new File([jsonBlob], lastPackage.jsonName, { type: "application/json" }));
+      if (lastPackage.videoBlob) {
+        files.push(new File([lastPackage.videoBlob], lastPackage.videoName, { type: lastPackage.videoBlob.type || "video/webm" }));
+      }
+      if (navigator.share && navigator.canShare && navigator.canShare({ files })) {
+        try {
+          await navigator.share({
+            title: "Mat Side match package",
+            text: (lastPackage.json.match.wrestlerName || "Match") + " live package",
+            files
+          });
+          return;
+        } catch (e) {
+          if (e && e.name === "AbortError") return;
+        }
+      }
+      alert("Share not available on this device. Use Download JSON and Download video, then upload both to Google Drive.");
+    }
+
+    function resetToSetup() {
+      lastPackage = null;
+      live.events = [];
+      showScreen("screen-setup");
+      document.getElementById("preview-video").style.display = "none";
+    }
+
+    // Boot
+    loadStoredSync();
+    document.getElementById("top-meta").title = "Build " + MAT_SIDE_BUILD;
+    const dateEl = document.getElementById("custom-date");
+    if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+    setSetupMode(sync && sync.season ? "import" : "custom");
+  </script>
+</body>
+</html>
