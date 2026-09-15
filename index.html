@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <title>Mat Side — Live Score & Record</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SW MatSide" />
+  <meta name="application-name" content="SW MatSide" />
+  <meta name="theme-color" content="#1C1F1E" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22SW%20MatSide%22%2C%22short_name%22%3A%22SW%20MatSide%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231C1F1E%22%2C%22theme_color%22%3A%22%231C1F1E%22%2C%22orientation%22%3A%22any%22%7D" />
+  <title>SW MatSide</title>
   <style>
     :root {
       --mat: #1C1F1E;
@@ -24,6 +30,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; background: var(--mat); color: var(--chalk); font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
     body { display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+    body.live-active { max-width: none; width: 100%; height: 100%; height: 100dvh; overflow: hidden; }
 
     .topbar {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -33,6 +40,10 @@
     .brand { font-size: 14px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
     .top-meta { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.3; }
     .top-meta strong { color: var(--chalk); }
+    .back-btn {
+      background: none; border: none; color: var(--gold); font-size: 13px; font-weight: 800;
+      cursor: pointer; padding: 4px 0; text-transform: uppercase; letter-spacing: 0.5px;
+    }
 
     .screen { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: calc(16px + var(--safeBottom)); display: none; }
     .screen.active { display: block; }
@@ -63,17 +74,95 @@
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .btn-row .btn { margin-top: 0; }
+    .btn-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .btn-row-3 .btn { margin-top: 0; }
     .muted { font-size: 12px; color: var(--muted); line-height: 1.4; }
     .pill {
       display: inline-block; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 99px;
       background: var(--goldDim); color: var(--gold); margin-left: 6px;
     }
-    .rec-pill {
-      background: var(--redDim); color: var(--red); animation: pulse 1.2s ease infinite;
-    }
-    @keyframes pulse { 50% { opacity: 0.55; } }
+    .pill-green { background: var(--greenDim); color: #6ddea0; }
+    .pill-red { background: var(--redDim); color: #ff8f7a; }
 
-    /* Live screen — full bleed video + overlay */
+    /* Home centered layout */
+    .home-center {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: calc(100% - 40px); gap: 12px; padding: 20px 16px;
+    }
+    .home-center .btn { max-width: 320px; width: 100%; }
+    .event-btn {
+      background: var(--panel); border: 1px solid var(--panelLine); color: var(--chalk);
+      text-align: left; padding: 14px 16px; border-radius: 10px; cursor: pointer; width: 100%; max-width: 320px;
+    }
+    .event-btn .ev-name { font-size: 15px; font-weight: 800; margin-bottom: 2px; }
+    .event-btn .ev-meta { font-size: 11px; color: var(--muted); }
+    .event-btn:active { transform: scale(0.98); }
+
+    /* Weight class list */
+    .filter-row {
+      display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .filter-chip {
+      padding: 8px 14px; border-radius: 99px; font-size: 12px; font-weight: 800;
+      border: 1px solid var(--panelLine); background: var(--mat); color: var(--muted); cursor: pointer;
+    }
+    .filter-chip.active { background: var(--goldDim); color: var(--gold); border-color: var(--gold); }
+
+    .wc-row {
+      display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+      background: var(--gold); color: var(--mat); border: none; border-radius: 8px;
+      margin-bottom: 8px; cursor: pointer; width: 100%; text-align: left;
+      font-family: inherit;
+    }
+    .wc-row:active { transform: scale(0.98); opacity: 0.92; }
+    /* Winner color coding */
+    .wc-row.pending { background: var(--gold); color: var(--mat); }
+    .wc-row.win-us { background: var(--green); color: var(--chalk); }
+    .wc-row.win-opp { background: var(--red); color: var(--chalk); }
+    .wc-row.tie { background: var(--panel); color: var(--chalk); border: 1px solid var(--panelLine); }
+    .wc-row.extra.pending {
+      background: var(--panel); color: var(--chalk); border: 1px solid var(--gold);
+    }
+    .wc-weight {
+      font-size: 18px; font-weight: 900; font-family: ui-monospace, monospace;
+      min-width: 48px; color: inherit; opacity: 0.95;
+    }
+    .wc-info { flex: 1; min-width: 0; }
+    .wc-name { font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+    .wc-sub { font-size: 11px; margin-top: 2px; opacity: 0.75; font-weight: 600; }
+    .wc-score {
+      font-size: 16px; font-weight: 900; font-family: ui-monospace, monospace;
+      white-space: nowrap; opacity: 0.95;
+    }
+    .wc-score.pending { font-size: 11px; font-weight: 800; text-transform: uppercase; opacity: 0.7; }
+
+    /* Dual meet team scoreboard */
+    .dual-board {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center;
+      background: var(--panel); border: 1px solid var(--panelLine); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 12px;
+    }
+    .dual-side { text-align: center; }
+    .dual-side .dual-lab {
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--muted); margin-bottom: 4px;
+    }
+    .dual-side .dual-pts {
+      font-size: 32px; font-weight: 900; font-family: ui-monospace, monospace; line-height: 1;
+    }
+    .dual-side.our .dual-pts { color: #6ddea0; }
+    .dual-side.opp .dual-pts { color: #ff8f7a; }
+    .dual-mid {
+      font-size: 11px; font-weight: 800; color: var(--gold); text-transform: uppercase;
+      letter-spacing: 1px; text-align: center;
+    }
+
+    .fab-add {
+      position: sticky; bottom: calc(12px + var(--safeBottom)); margin-top: 16px;
+      width: 100%; padding-top: 8px;
+    }
+
+    /* Live screen */
     #screen-live {
       display: none; position: relative; flex-direction: column;
       padding: 0; overflow: hidden; height: 100%; background: #000;
@@ -86,7 +175,6 @@
     .video-wrap video {
       width: 100%; height: 100%; object-fit: cover; object-position: center;
       display: block; background: #111;
-      /* iOS / Android */
       transform: translateZ(0);
     }
 
@@ -101,22 +189,74 @@
     }
     .live-overlay * { pointer-events: auto; }
 
+    @media (orientation: landscape) {
+      html, body { max-width: none; height: 100%; height: 100dvh; }
+      #screen-live.active { height: 100%; height: 100dvh; }
+      .video-wrap video { object-fit: cover; width: 100%; height: 100%; }
+      .live-bottom {
+        max-width: none; width: 100%; margin: 0;
+        padding-left: 8px; padding-right: 8px;
+      }
+      .live-overlay {
+        background: linear-gradient(to bottom,
+          rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 16%,
+          rgba(0,0,0,0) 35%, rgba(0,0,0,0) 60%,
+          rgba(0,0,0,0.4) 100%);
+      }
+      .ov-btn { min-height: 44px; }
+      .side-board {
+        display: grid;
+        grid-template-columns: minmax(100px, 22vw) 1fr minmax(100px, 22vw);
+        gap: 8px;
+        align-items: end;
+        width: 100%;
+      }
+      .side-board .side-col {
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .side-board .side-col.left { align-items: stretch; }
+      .side-board .side-col.right { align-items: stretch; }
+      .side-board .side-col .ov-btn { width: 100%; }
+      .side-board .side-mid {
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+        gap: 6px; min-height: 1px;
+      }
+      .side-board-stack { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+      .side-board-stack .side-board { flex: 0 0 auto; }
+    }
+    @media (orientation: landscape) and (max-height: 420px) {
+      .score-pill .num { font-size: 22px; }
+      .live-bottom { padding-top: 0; }
+      .ov-btn { min-height: 38px; font-size: 12px; }
+    }
+    @media (orientation: portrait) {
+      .side-board { display: block; width: 100%; }
+      .side-board .side-col { display: contents; }
+      .side-board .side-mid { display: none; }
+    }
+
     .live-top {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 8px; padding: 10px 10px 0;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 8px 10px 0;
     }
     .live-chip {
       font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px;
       background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.12);
       color: var(--chalk); backdrop-filter: blur(6px);
+      cursor: pointer;
     }
     .live-chip.rec { color: #ff6b5a; border-color: rgba(194,59,34,0.5); }
+    .live-chip.rec.paused { color: var(--gold); border-color: rgba(217,164,65,0.55); }
     .live-chip.period {
       color: var(--gold); border-color: rgba(217,164,65,0.5); min-width: 48px; text-align: center;
       font-size: 16px; padding: 8px 12px;
     }
     .score-strip {
-      display: flex; justify-content: center; gap: 18px; padding: 6px 10px 8px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px 8px;
     }
     .score-pill {
       min-width: 72px; text-align: center; padding: 6px 12px; border-radius: 10px;
@@ -138,13 +278,31 @@
     }
     .names-row span { max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pos-label {
-      text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
-      color: var(--gold); margin-bottom: 6px; text-transform: uppercase;
+      text-align: center; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
+      margin-bottom: 8px; text-transform: uppercase;
+      padding: 6px 12px; border-radius: 8px; align-self: center;
+      max-width: 90%; margin-left: auto; margin-right: auto;
+      border: 1px solid transparent;
+    }
+    .pos-label.pos-neutral {
+      color: var(--gold); background: rgba(74,59,29,0.75);
+      border-color: rgba(217,164,65,0.45);
+    }
+    .pos-label.pos-our {
+      color: #b8e0c8; background: rgba(30,59,44,0.88);
+      border-color: rgba(47,122,79,0.7);
+    }
+    .pos-label.pos-opp {
+      color: #f0b4a8; background: rgba(74,36,28,0.88);
+      border-color: rgba(194,59,34,0.7);
+    }
+    .pos-label.pos-choice {
+      color: var(--gold); background: rgba(74,59,29,0.9);
+      border-color: rgba(217,164,65,0.7);
+      animation: pulse 1.2s ease infinite;
     }
 
-    .ov-grid {
-      display: grid; gap: 6px;
-    }
+    .ov-grid { display: grid; gap: 6px; }
     .ov-grid.g2 { grid-template-columns: 1fr 1fr; }
     .ov-grid.g3 { grid-template-columns: 1fr 1fr 1fr; }
     .ov-grid.g4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
@@ -175,97 +333,176 @@
       padding: 10px 16px; border-radius: 99px; z-index: 50; display: none; white-space: nowrap;
       max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
     }
+
+    /* Review / stats */
+    .stat-row {
+      display: flex; justify-content: space-between; padding: 8px 0;
+      border-bottom: 1px solid var(--panelLine); font-size: 13px;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .event-log {
+      font-size: 12px; font-family: ui-monospace, monospace; line-height: 1.5;
+      max-height: 240px; overflow-y: auto; background: var(--mat); border-radius: 8px;
+      padding: 10px; margin-top: 8px;
+    }
+
+    /* SW watermark — live overlay (operator view; not burned into recorded video) */
+    .live-watermark {
+      position: absolute;
+      right: 10px;
+      bottom: calc(120px + var(--safeBottom));
+      width: 88px;
+      opacity: 0.28;
+      pointer-events: none;
+      z-index: 1;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+    }
+    .live-watermark img { width: 100%; height: auto; display: block; filter: brightness(0) invert(1); opacity: 0.9; }
+    @media (orientation: landscape) {
+      .live-watermark {
+        width: 72px;
+        right: 12px;
+        bottom: calc(90px + var(--safeBottom));
+        opacity: 0.22;
+      }
+    }
+    @media (orientation: landscape) and (max-height: 420px) {
+      .live-watermark { width: 56px; bottom: calc(70px + var(--safeBottom)); }
+    }
+
+    /* Home logo */
+    .home-logo {
+      width: 140px;
+      margin: 0 auto 18px;
+      opacity: 0.95;
+    }
+    .home-logo img { width: 100%; height: auto; display: block; filter: brightness(0) invert(1); opacity: 0.95; }
+    .home-tag {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--muted); text-align: center; margin-bottom: 18px;
+    }
   </style>
 </head>
 <body>
-  <div class="topbar">
+  <div class="topbar" id="topbar">
     <div>
-      <div class="brand">Mat Side</div>
-      <div style="font-size:10px; color:var(--muted);">Live score + record</div>
+      <button type="button" class="back-btn" id="back-btn" style="display:none;" onclick="goBack()">← Back</button>
+      <div class="brand" id="brand">SW MatSide</div>
     </div>
-    <div class="top-meta" id="top-meta">No season loaded</div>
+    <div class="top-meta" id="top-meta">Ready</div>
   </div>
 
-  <!-- SETUP -->
-  <div id="screen-setup" class="screen active">
-    <div class="card">
-      <div class="card-title">1. Import from Mat Scout</div>
-      <p class="muted" style="margin-bottom:10px;">
-        In Mat Scout → Admin → Season Archive &amp; Storage, tap <strong>Export for Mat Side</strong>.
-        Open that JSON file here to load roster and events.
-      </p>
-      <input type="file" id="sync-file" class="input" accept="application/json,.json" />
-      <div id="sync-status" class="muted"></div>
+  <!-- HOME -->
+  <div id="screen-home" class="screen active">
+    <div class="home-center" id="home-list">
+      <!-- populated by JS -->
     </div>
+  </div>
 
+  <!-- ADD EVENT -->
+  <div id="screen-add-event" class="screen">
     <div class="card">
-      <div class="card-title">2. Match setup</div>
+      <div class="card-title">Add Event</div>
       <div class="btn-row" style="margin-bottom:12px;">
-        <button type="button" class="btn btn-ghost" id="mode-import-btn" onclick="setSetupMode('import')" style="margin-top:0;">From import</button>
-        <button type="button" class="btn btn-gold" id="mode-custom-btn" onclick="setSetupMode('custom')" style="margin-top:0;">Custom / test</button>
+        <button type="button" class="btn btn-gold" id="ae-import-btn" onclick="setAddEventMode('import')" style="margin-top:0;">Import from Mat Scout</button>
+        <button type="button" class="btn btn-ghost" id="ae-custom-btn" onclick="setAddEventMode('custom')" style="margin-top:0;">Create Custom</button>
       </div>
 
-      <div id="setup-import">
-        <label>Event / Bout</label>
-        <select id="sel-bout" class="select" onchange="onBoutChange()">
-          <option value="">— Import season first —</option>
-        </select>
-        <label>Our wrestler</label>
-        <select id="sel-wrestler" class="select">
-          <option value="">— Select —</option>
-        </select>
+      <div id="ae-import">
+        <p class="muted" style="margin-bottom:10px;">
+          In Mat Scout → Admin → Season Archive &amp; Storage, tap <strong>Export for Mat Side</strong>.
+          Open that JSON to load event, roster, and opponent roster.
+        </p>
+        <input type="file" id="ae-sync-file" class="input" accept="application/json,.json" />
+        <div id="ae-import-status" class="muted"></div>
       </div>
 
-      <div id="setup-custom" style="display:none;">
-        <p class="muted" style="margin-bottom:10px;">Enter anything to test live scoring — no Mat Scout file required.</p>
-        <label>Team / school (optional)</label>
-        <input id="custom-team" class="input" placeholder="e.g. Scorpions" />
+      <div id="ae-custom" style="display:none;">
+        <p class="muted" style="margin-bottom:10px;">Enter event details. If a team roster was imported in Admin, it will be available.</p>
         <label>Event name</label>
-        <input id="custom-event" class="input" placeholder="e.g. Dual vs Desert Ridge" />
+        <input id="ae-name" class="input" placeholder="e.g. Dual vs Desert Ridge" />
         <label>Event date</label>
-        <input id="custom-date" type="date" class="input" />
+        <input id="ae-date" type="date" class="input" />
         <label>Division</label>
-        <select id="custom-division" class="select">
+        <select id="ae-division" class="select">
           <option value="Boys">Boys</option>
           <option value="Girls">Girls</option>
           <option value="Both">Both</option>
         </select>
-        <label>Our wrestler name</label>
-        <input id="custom-wrestler" class="input" placeholder="e.g. Jane Doe" />
-        <label>Weight class</label>
-        <input id="custom-weight" class="input" placeholder="e.g. 132" inputmode="numeric" />
+        <label>Wrestling style</label>
+        <select id="ae-style" class="select">
+          <option value="Folkstyle">Folkstyle</option>
+          <option value="Freestyle">Freestyle</option>
+          <option value="Greco-Roman">Greco-Roman</option>
+        </select>
+        <label>Opponent team</label>
+        <input id="ae-opponent-team" class="input" placeholder="e.g. Desert Ridge" />
+        <label>Match level (default)</label>
+        <select id="ae-level" class="select">
+          <option value="Varsity">Varsity</option>
+          <option value="JV">JV</option>
+          <option value="Junior High">Junior High</option>
+          <option value="College">College</option>
+          <option value="Exhibition">Exhibition</option>
+        </select>
+        <button type="button" class="btn btn-ghost" onclick="fillDemoEvent()" style="margin-top:4px;">Fill demo data</button>
+        <button type="button" class="btn btn-gold" onclick="createCustomEvent()">Create event</button>
       </div>
+    </div>
+  </div>
 
-      <label>Opponent name</label>
-      <input id="inp-opponent" class="input" placeholder="Opponent wrestler" list="opp-list" />
-      <datalist id="opp-list"></datalist>
-      <label>Match level</label>
-      <select id="sel-level" class="select">
+  <!-- EVENT DETAIL (weight classes) -->
+  <div id="screen-event" class="screen">
+    <div class="card" style="margin-bottom:10px;">
+      <div class="card-title" id="ev-title">Event</div>
+      <p class="muted" id="ev-meta"></p>
+    </div>
+    <div class="dual-board" id="dual-board">
+      <div class="dual-side our">
+        <div class="dual-lab" id="dual-our-lab">Us</div>
+        <div class="dual-pts" id="dual-our-pts">0</div>
+      </div>
+      <div class="dual-mid">Dual</div>
+      <div class="dual-side opp">
+        <div class="dual-lab" id="dual-opp-lab">Opp</div>
+        <div class="dual-pts" id="dual-opp-pts">0</div>
+      </div>
+    </div>
+    <div class="filter-row" id="level-filter">
+      <button type="button" class="filter-chip active" data-level="Both" onclick="setLevelFilter('Both')">Both</button>
+      <button type="button" class="filter-chip" data-level="Varsity" onclick="setLevelFilter('Varsity')">Varsity</button>
+      <button type="button" class="filter-chip" data-level="JV" onclick="setLevelFilter('JV')">JV</button>
+    </div>
+    <div id="wc-list"></div>
+    <div class="fab-add">
+      <button type="button" class="btn btn-gold" onclick="showAddMatch()">+ Add match</button>
+    </div>
+  </div>
+
+  <!-- ADD / EDIT MATCH (validate wrestlers) -->
+  <div id="screen-match-setup" class="screen">
+    <div class="card">
+      <div class="card-title" id="ms-title">Match setup</div>
+      <label>Weight class</label>
+      <input id="ms-weight" class="input" placeholder="e.g. 132" inputmode="numeric" />
+      <label>Level</label>
+      <select id="ms-level" class="select">
         <option value="Varsity">Varsity</option>
         <option value="JV">JV</option>
-        <option value="Junior High">Junior High</option>
-        <option value="College">College</option>
         <option value="Exhibition">Exhibition</option>
+        <option value="Junior High">Junior High</option>
       </select>
-      <button type="button" class="btn btn-ghost" onclick="fillDemoCustom()" style="margin-top:4px;">Fill demo test data</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">3. Camera</div>
-      <p class="muted" style="margin-bottom:10px;">Uses the rear camera when available. Recording starts when you begin the match.</p>
+      <label>Our wrestler</label>
+      <input id="ms-wrestler" class="input" list="ms-roster-list" placeholder="Unknown — enter name" />
+      <datalist id="ms-roster-list"></datalist>
+      <label>Opponent</label>
+      <input id="ms-opponent" class="input" list="ms-opp-list" placeholder="Unknown — enter opponent" />
+      <datalist id="ms-opp-list"></datalist>
+      <p class="muted" style="margin-bottom:10px;">Edit names for this weight, then start live scoring.</p>
       <div class="btn-row">
-        <button class="btn btn-ghost" type="button" onclick="previewCamera()">Preview camera</button>
-        <button class="btn btn-gold" type="button" onclick="startLiveMatch()">Start live match</button>
+        <button type="button" class="btn btn-ghost" onclick="cancelMatchSetup()">Back</button>
+        <button type="button" class="btn btn-gold" onclick="confirmMatchAndGoLive()">Save &amp; Start live</button>
       </div>
-      <video id="preview-video" playsinline muted style="width:100%; border-radius:8px; margin-top:10px; background:#000; max-height:200px; display:none;"></video>
-    </div>
-
-    <div class="card">
-      <div class="card-title">About packages</div>
-      <p class="muted">
-        When you end a match, Mat Side builds a package (video + score JSON). Save it to your phone or a shared
-        Google Drive folder, then import into Mat Scout so the coach can add modifiers and technique detail.
-      </p>
     </div>
   </div>
 
@@ -274,10 +511,11 @@
     <div class="video-wrap">
       <video id="live-video" playsinline webkit-playsinline muted autoplay></video>
     </div>
+    <!-- SW watermark on live view -->
+    <div class="live-watermark" id="live-watermark" aria-hidden="true"></div>
     <div class="live-overlay">
       <div class="live-top">
-        <div class="live-chip rec" id="rec-badge">● REC 00:00</div>
-        <button type="button" class="live-chip period" id="period-btn" onclick="cyclePeriod()">P1</button>
+        <button type="button" class="live-chip rec" id="rec-badge" onclick="toggleRecordingPause()">● REC 00:00</button>
         <button type="button" class="live-chip" onclick="undoLastEvent()" title="Undo">UNDO</button>
       </div>
       <div class="score-strip">
@@ -285,6 +523,7 @@
           <div class="lab" id="live-our-name">Us</div>
           <div class="num" id="live-our-pts">0</div>
         </div>
+        <button type="button" class="live-chip period" id="period-btn" onclick="cyclePeriod()">P1</button>
         <div class="score-pill opp">
           <div class="lab" id="live-opp-name">Opp</div>
           <div class="num" id="live-opp-pts">0</div>
@@ -305,33 +544,117 @@
     </div>
   </div>
 
-  <!-- DONE -->
+  <!-- DONE / PACKAGE -->
   <div id="screen-done" class="screen">
     <div class="card">
-      <div class="card-title">Match package ready</div>
+      <div class="card-title">Match saved</div>
       <p class="muted" id="done-summary" style="margin-bottom:12px;"></p>
       <button class="btn btn-gold" type="button" onclick="downloadPackageJson()">Download score JSON</button>
       <button class="btn btn-green" type="button" id="btn-download-video" onclick="downloadPackageVideo()">Download video</button>
       <button class="btn btn-ghost" type="button" onclick="sharePackage()" id="btn-share">Share package files</button>
       <p class="muted" style="margin-top:12px;">
-        Put both files in a Google Drive folder (or keep on device). In Mat Scout, import the JSON and attach the video on Scout to edit modifiers.
+        Files use naming: <strong>wrestler_opponent_daymonthyear</strong>. Event folder: <strong>event_daymonthyear</strong>.
+        Save to your export location (Admin), then import into Mat Scout.
       </p>
-      <button class="btn btn-ghost" type="button" style="margin-top:12px;" onclick="resetToSetup()">New match / setup</button>
+      <button class="btn btn-ghost" type="button" style="margin-top:12px;" onclick="afterMatchDone()">Back to event</button>
+    </div>
+  </div>
+
+  <!-- REVIEW MATCH -->
+  <div id="screen-review" class="screen">
+    <div class="card">
+      <div class="card-title">Match review</div>
+      <p class="muted" id="rev-summary" style="margin-bottom:12px;"></p>
+      <div id="rev-stats"></div>
+      <div class="card-title" style="margin-top:14px;">Event log</div>
+      <div class="event-log" id="rev-log"></div>
+      <button class="btn btn-gold" type="button" style="margin-top:12px;" onclick="downloadPackageJsonFromReview()">Download JSON</button>
+      <button class="btn btn-green" type="button" id="rev-dl-video" style="margin-top:8px; display:none;" onclick="downloadPackageVideoFromReview()">Download video</button>
+      <button class="btn btn-ghost" type="button" style="margin-top:8px;" onclick="goBack()">Back</button>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="screen-admin" class="screen">
+    <div class="card">
+      <div class="card-title">Team roster</div>
+      <p class="muted" style="margin-bottom:10px;">
+        Import a Mat Scout season export (or Mat Side sync) to load the full team roster.
+        This roster is used when creating custom events and when filling match setup.
+      </p>
+      <input type="file" id="admin-roster-file" class="input" accept="application/json,.json" />
+      <div id="admin-roster-status" class="muted"></div>
+      <button type="button" class="btn btn-ghost" style="margin-top:8px;" onclick="clearAdminRoster()">Clear roster</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Export location</div>
+      <p class="muted" style="margin-bottom:10px;">
+        Where you plan to store match packages (JSON + video). Mat Side cannot write directly to Google Drive from the browser;
+        download or share files, then place them in this folder structure.
+      </p>
+      <label>Notes / path reminder</label>
+      <textarea id="admin-export-path" class="input" rows="3" placeholder="e.g. Google Drive → SW Wrestling → MatSide Exports&#10;or D:\Wrestling\MatSide" style="resize:vertical; min-height:72px;"></textarea>
+      <button type="button" class="btn btn-gold" onclick="saveExportPath()">Save location notes</button>
+      <p class="muted" style="margin-top:10px;">
+        <strong>Naming:</strong><br/>
+        Event folder: <code>EventName_3 Jun 26</code><br/>
+        Match files: <code>WrestlerName_OpponentName_3 Jun 26.json</code> (+ video)
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">Data</div>
+      <p class="muted" id="admin-data-info" style="margin-bottom:10px;"></p>
+      <button type="button" class="btn btn-ghost" onclick="exportAllLocalData()">Export all local data (JSON)</button>
+      <button type="button" class="btn btn-red" style="margin-top:8px;" onclick="clearAllEvents()">Clear all events</button>
+    </div>
+    <div class="card">
+      <div class="card-title">About / Install as app</div>
+      <p class="muted">
+        SW MatSide · Live score + record for the mat side.
+      </p>
+      <p class="muted" style="margin-top:8px;">
+        <strong>Install from a downloaded file is limited:</strong> browsers only offer “Install app”
+        when the page is served over <strong>https://</strong> (not from Downloads / file://).
+      </p>
+      <p class="muted" style="margin-top:8px;">
+        <strong>Workarounds:</strong><br/>
+        · Android: Chrome ⋮ → <em>Add to Home screen</em> (shortcut; may still work from a file).<br/>
+        · iPhone: open the file in <strong>Safari</strong> → Share → <em>Add to Home Screen</em>.<br/>
+        · Best: host this HTML on any free https host (Netlify, GitHub Pages, etc.), then Install app.
+      </p>
+      <p class="muted" style="margin-top:8px;" id="admin-build"></p>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
-    const MAT_SIDE_BUILD = "2026-09-12-v1";
-    const SYNC_KEY = "mat-side-sync-v1";
+    const MAT_SIDE_BUILD = "2026-09-14-sw-v6";
+    const STORE_KEY = "sw-matside-v1";
 
-    let sync = null; // imported mat-side-sync payload
+    // ─── Persistent state ───────────────────────────────────────────
+    let store = {
+      teamName: "",
+      roster: [],          // admin-imported team roster
+      events: [],          // { id, name, date, division, opponentTeam, level, roster[], opponentRoster[], matches[] }
+      exportPath: "",
+      seasonMeta: null
+    };
+
+    let currentEventId = null;
+    let currentMatchId = null;   // when editing/starting a match
+    let levelFilter = "Both";
+    let navStack = ["home"];
+
+    // Live scoring state (same engine as before)
     let mediaStream = null;
     let mediaRecorder = null;
     let recordedChunks = [];
     let recording = false;
+    let recPaused = false;
     let recordStartedAt = 0;
+    let pausedAccumMs = 0;
+    let pauseStartedAt = 0;
     let recTimer = null;
     let matchStartedAt = 0;
 
@@ -345,11 +668,15 @@
       period: "P1",
       events: [],
       ourP: 0,
-      oppP: 0
+      oppP: 0,
+      eventId: null,
+      matchId: null
     };
 
-    let lastPackage = null; // { json, videoBlob, videoName }
+    let lastPackage = null;
+    let reviewMatch = null;
 
+    // ─── Utils ──────────────────────────────────────────────────────
     function toast(msg) {
       const el = document.getElementById("toast");
       el.textContent = msg;
@@ -358,133 +685,720 @@
       toast._t = setTimeout(() => { el.style.display = "none"; }, 2200);
     }
 
-    function showScreen(id) {
-      document.querySelectorAll(".screen, #screen-live").forEach(el => el.classList.remove("active"));
-      const el = document.getElementById(id);
-      if (el) el.classList.add("active");
+    function uid() {
+      return Math.random().toString(36).slice(2, 10);
     }
 
-    function formatMmSs(sec) {
-      sec = Math.max(0, Math.floor(sec || 0));
-      const m = Math.floor(sec / 60);
-      const s = sec % 60;
-      return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    function formatDayMonthYear(d) {
+      // "3 Jun 26"
+      const dt = d ? new Date(d + (String(d).length === 10 ? "T12:00:00" : "")) : new Date();
+      if (isNaN(dt.getTime())) {
+        const now = new Date();
+        const day = now.getDate();
+        const mon = now.toLocaleString("en", { month: "short" });
+        const yr = String(now.getFullYear()).slice(-2);
+        return day + " " + mon + " " + yr;
+      }
+      const day = dt.getDate();
+      const mon = dt.toLocaleString("en", { month: "short" });
+      const yr = String(dt.getFullYear()).slice(-2);
+      return day + " " + mon + " " + yr;
     }
 
-    function videoTimestamp() {
-      if (!recordStartedAt) return "00:00";
-      return formatMmSs((Date.now() - recordStartedAt) / 1000);
+    function safeFilePart(s) {
+      return String(s || "x").replace(/[^a-z0-9-_]+/gi, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "x";
     }
 
-    function loadStoredSync() {
+    function matchFileBase(wrestler, opponent, dateStr) {
+      return safeFilePart(wrestler) + "_" + safeFilePart(opponent) + "_" + formatDayMonthYear(dateStr);
+    }
+
+    function eventFolderName(eventName, dateStr) {
+      return safeFilePart(eventName) + "_" + formatDayMonthYear(dateStr);
+    }
+
+    function shortName(n, fallback) {
+      n = String(n || fallback || "").trim();
+      if (n.length <= 12) return n || fallback;
+      return n.slice(0, 11) + "…";
+    }
+
+    function escHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    function loadStore() {
       try {
-        const raw = localStorage.getItem(SYNC_KEY);
+        const raw = localStorage.getItem(STORE_KEY);
         if (raw) {
-          sync = JSON.parse(raw);
-          applySyncToUI();
+          const data = JSON.parse(raw);
+          store = Object.assign(store, data);
+          if (!Array.isArray(store.events)) store.events = [];
+          if (!Array.isArray(store.roster)) store.roster = [];
         }
       } catch (e) {}
     }
 
-    function saveSync() {
-      try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) {}
+    function saveStore() {
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      } catch (e) {
+        toast("Storage full — free space or export data");
+      }
     }
 
-    function applySyncToUI() {
-      const status = document.getElementById("sync-status");
+    // ─── Navigation ─────────────────────────────────────────────────
+    function showScreen(id) {
+      document.querySelectorAll(".screen, #screen-live").forEach(el => el.classList.remove("active"));
+      const el = document.getElementById(id);
+      if (el) el.classList.add("active");
+      const isLive = id === "screen-live";
+      document.body.classList.toggle("live-active", isLive);
+      const bar = document.getElementById("topbar");
+      if (bar) bar.style.display = isLive ? "none" : "";
+      if (isLive) enterLiveFullscreen();
+      else exitLiveFullscreen();
+      updateTopbar(id);
+    }
+
+    function updateTopbar(screenId) {
+      const back = document.getElementById("back-btn");
+      const brand = document.getElementById("brand");
       const meta = document.getElementById("top-meta");
-      if (!sync || !sync.season) {
-        status.textContent = "";
-        meta.textContent = "No season loaded";
-        return;
-      }
-      status.innerHTML = `<span style="color:var(--green);">Loaded:</span> <strong>${sync.season.name}</strong> · ${(sync.roster||[]).length} athletes · ${(sync.bouts||[]).length} events · ${sync.teamName || ""}`;
-      meta.innerHTML = `<strong>${sync.season.name}</strong><br/>${(sync.roster||[]).length} athletes`;
+      const showBack = screenId !== "screen-home" && screenId !== "screen-live";
+      back.style.display = showBack ? "block" : "none";
+      brand.style.display = showBack ? "none" : "block";
 
-      const boutSel = document.getElementById("sel-bout");
-      const bouts = (sync.bouts || []).slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
-      boutSel.innerHTML = `<option value="">— Select event —</option>` + bouts.map(b =>
-        `<option value="${b.id}">${b.date || "?"} [${b.type || "Dual"}] vs ${b.opponentTeam || "?"} (${b.division || ""})</option>`
-      ).join("");
-
-      fillWrestlerSelect();
-    }
-
-    function fillWrestlerSelect() {
-      const wSel = document.getElementById("sel-wrestler");
-      const boutId = document.getElementById("sel-bout").value;
-      const bout = (sync && sync.bouts || []).find(b => b.id === boutId);
-      let roster = (sync && sync.roster || []).filter(w => !w.quit);
-      if (bout && bout.division && bout.division !== "Both") {
-        roster = roster.filter(w => w.division === bout.division || !w.division);
-      }
-      roster.sort((a,b) => (Number(a.weightClass)||0) - (Number(b.weightClass)||0));
-      wSel.innerHTML = `<option value="">— Select wrestler —</option>` + roster.map(w =>
-        `<option value="${w.id}">${w.weightClass || "?"} — ${w.name} (${w.level || ""})</option>`
-      ).join("");
-
-      const dl = document.getElementById("opp-list");
-      dl.innerHTML = "";
-      if (bout && bout.opponentRoster) {
-        bout.opponentRoster.forEach(o => {
-          const opt = document.createElement("option");
-          opt.value = o.name || "";
-          dl.appendChild(opt);
-        });
+      if (screenId === "screen-home") {
+        meta.textContent = store.roster.length ? (store.roster.length + " on roster") : "Ready";
+      } else if (screenId === "screen-admin") {
+        meta.textContent = "Admin";
+      } else if (screenId === "screen-event" && currentEventId) {
+        const ev = store.events.find(e => e.id === currentEventId);
+        meta.innerHTML = ev ? `<strong>${escHtml(ev.name)}</strong>` : "";
+      } else {
+        meta.textContent = "";
       }
     }
 
-    function onBoutChange() {
-      fillWrestlerSelect();
-      const boutId = document.getElementById("sel-bout").value;
-      const bout = (sync && sync.bouts || []).find(b => b.id === boutId);
-      if (bout && bout.competitionLevel) {
-        const lvl = document.getElementById("sel-level");
-        if ([...lvl.options].some(o => o.value === bout.competitionLevel)) lvl.value = bout.competitionLevel;
+    function goBack() {
+      if (navStack.length > 1) {
+        navStack.pop();
+        const prev = navStack[navStack.length - 1];
+        if (prev === "home") renderHome();
+        else if (prev === "event") renderEvent();
+        else if (prev === "admin") { showScreen("screen-admin"); updateAdminUI(); }
+        else if (prev === "add-event") showScreen("screen-add-event");
+        else if (prev === "review") showScreen("screen-review");
+        else renderHome();
+      } else {
+        renderHome();
       }
     }
 
-    document.getElementById("sync-file").addEventListener("change", async (e) => {
+    function pushNav(screen) {
+      if (navStack[navStack.length - 1] !== screen) navStack.push(screen);
+    }
+
+    async function enterLiveFullscreen() {
+      try {
+        const root = document.documentElement;
+        if (root.requestFullscreen) await root.requestFullscreen();
+        else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+      } catch (e) {}
+    }
+
+    async function exitLiveFullscreen() {
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } catch (e) {}
+    }
+
+    // ─── HOME ───────────────────────────────────────────────────────
+    // Exact SW single-leg logo (embedded JPEG)
+    const SW_LOGO_URI = 'data:image/png;base64,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';
+
+    function swLogoImg(className) {
+      return '<img class="' + (className || '') + '" src="' + SW_LOGO_URI + '" alt="Strategic Wrestler" draggable="false" />';
+    }
+
+    function renderHome() {
+      navStack = ["home"];
+      const host = document.getElementById("home-list");
+      let html = "";
+
+      html += `<div class="home-logo">${swLogoImg()}</div>`;
+      html += `<div class="home-tag">SW MatSide</div>`;
+
+      const events = (store.events || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      events.forEach(ev => {
+        const div = ev.division || "";
+        const scored = (ev.matches || []).filter(m => m.status === "scored").length;
+        const total = (ev.matches || []).length;
+        html += `<button type="button" class="event-btn" onclick="openEvent('${ev.id}')">
+          <div class="ev-name">${escHtml(ev.name)}</div>
+          <div class="ev-meta">${escHtml(div)}${div ? " · " : ""}${escHtml(formatDayMonthYear(ev.date))}${total ? " · " + scored + "/" + total + " scored" : ""}</div>
+        </button>`;
+      });
+
+      html += `<button type="button" class="btn btn-gold" onclick="openAddEvent()">Add Event</button>`;
+      html += `<button type="button" class="btn btn-ghost" onclick="openAdmin()">Admin</button>`;
+
+      host.innerHTML = html;
+      showScreen("screen-home");
+    }
+
+    function openAddEvent() {
+      pushNav("add-event");
+      setAddEventMode("import");
+      document.getElementById("ae-import-status").textContent = "";
+      const dateEl = document.getElementById("ae-date");
+      if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+      showScreen("screen-add-event");
+    }
+
+    function openAdmin() {
+      pushNav("admin");
+      updateAdminUI();
+      showScreen("screen-admin");
+    }
+
+    function openEvent(id) {
+      currentEventId = id;
+      levelFilter = "Both";
+      pushNav("event");
+      renderEvent();
+    }
+
+    // ─── ADD EVENT ──────────────────────────────────────────────────
+    function setAddEventMode(mode) {
+      const isImport = mode === "import";
+      document.getElementById("ae-import").style.display = isImport ? "block" : "none";
+      document.getElementById("ae-custom").style.display = isImport ? "none" : "block";
+      document.getElementById("ae-import-btn").className = "btn " + (isImport ? "btn-gold" : "btn-ghost");
+      document.getElementById("ae-custom-btn").className = "btn " + (!isImport ? "btn-gold" : "btn-ghost");
+      document.getElementById("ae-import-btn").style.marginTop = "0";
+      document.getElementById("ae-custom-btn").style.marginTop = "0";
+    }
+
+    function parseMatScoutPayload(data) {
+      // Normalize various Mat Scout / Mat Side export shapes into events + roster
+      let roster = [];
+      let bouts = [];
+      let teamName = "";
+      let seasonMeta = null;
+
+      if (data.type === "mat-side-sync" || (data.season && data.roster)) {
+        roster = data.roster || [];
+        bouts = data.bouts || [];
+        teamName = data.teamName || "";
+        seasonMeta = data.season || null;
+      } else if (data.store && data.store.seasons) {
+        const s = data.store.seasons.find(x => x.id === data.store.activeSeasonId) || data.store.seasons[0];
+        roster = s.roster || [];
+        bouts = s.bouts || [];
+        teamName = (data.branding && data.branding.teamName) || "";
+        seasonMeta = { id: s.id, name: s.name, style: s.style || "Folkstyle" };
+      } else if (data.season && data.season.roster) {
+        roster = data.season.roster || [];
+        bouts = data.season.bouts || [];
+        seasonMeta = { id: data.season.id, name: data.season.name, style: data.season.style || "Folkstyle" };
+      } else {
+        throw new Error("Not a recognized Mat Scout / Mat Side export.");
+      }
+      return { roster, bouts, teamName, seasonMeta };
+    }
+
+    document.getElementById("ae-sync-file").addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.type !== "mat-side-sync" && !(data.season && data.roster)) {
-          // Accept full Mat Scout backup / season archive loosely
-          if (data.store && data.store.seasons) {
-            const s = data.store.seasons.find(x => x.id === data.store.activeSeasonId) || data.store.seasons[0];
-            sync = {
-              type: "mat-side-sync",
-              version: 1,
-              teamName: (data.branding && data.branding.teamName) || "",
-              season: { id: s.id, name: s.name, style: s.style || "Folkstyle" },
-              roster: s.roster || [],
-              bouts: s.bouts || []
-            };
-          } else if (data.season && data.season.roster) {
-            sync = {
-              type: "mat-side-sync",
-              version: 1,
-              teamName: "",
-              season: { id: data.season.id, name: data.season.name, style: data.season.style || "Folkstyle" },
-              roster: data.season.roster || [],
-              bouts: data.season.bouts || []
-            };
-          } else {
-            throw new Error("Not a Mat Side sync or Mat Scout export file.");
-          }
-        } else {
-          sync = data;
+        const parsed = parseMatScoutPayload(data);
+
+        if (parsed.teamName) store.teamName = parsed.teamName;
+        if (parsed.seasonMeta) store.seasonMeta = parsed.seasonMeta;
+        // Merge roster into admin roster if empty or update
+        if (parsed.roster.length) {
+          store.roster = parsed.roster.filter(w => !w.quit);
         }
-        saveSync();
-        applySyncToUI();
-        toast("Season imported");
+
+        let added = 0;
+        (parsed.bouts || []).forEach(b => {
+          // Skip if already have event with same id
+          if (store.events.some(ev => ev.id === b.id)) return;
+          const div = b.division || "Boys";
+          let r = (parsed.roster || []).filter(w => !w.quit);
+          if (div && div !== "Both") {
+            r = r.filter(w => w.division === div || !w.division);
+          }
+          r.sort((a, b) => (Number(a.weightClass) || 0) - (Number(b.weightClass) || 0));
+          const level = b.competitionLevel || "Varsity";
+          // Full dual line for division; fill names from roster by weight
+          const weights = standardWeightsForDivision(div);
+          const matches = weights.map(w => {
+            const rw = r.find(x => String(x.weightClass || "") === w);
+            return {
+              id: uid(),
+              weightClass: w,
+              wrestlerId: rw ? rw.id : null,
+              wrestlerName: rw ? (rw.name || "") : "",
+              opponent: "",
+              level: (rw && rw.level) || level,
+              status: "pending",
+              ourPoints: 0,
+              oppPoints: 0,
+              events: [],
+              package: null,
+              isStandardSlot: true
+            };
+          });
+          // Opponent names from opponent roster by weight if available
+          (b.opponentRoster || []).forEach(o => {
+            const w = String(o.weightClass || "");
+            if (!w) return;
+            const m = matches.find(x => x.weightClass === w);
+            if (m && !m.opponent) m.opponent = o.name || "";
+          });
+
+          const style = (parsed.seasonMeta && parsed.seasonMeta.style) || b.style || "Folkstyle";
+          store.events.push({
+            id: b.id || uid(),
+            name: (b.type || "Dual") + " vs " + (b.opponentTeam || "Opponent"),
+            date: b.date || new Date().toISOString().slice(0, 10),
+            division: div,
+            style,
+            opponentTeam: b.opponentTeam || "",
+            level,
+            type: b.type || "Dual",
+            roster: r.map(w => ({ id: w.id, name: w.name, weightClass: w.weightClass, level: w.level, division: w.division })),
+            opponentRoster: b.opponentRoster || [],
+            matches
+          });
+          added++;
+        });
+
+        saveStore();
+        document.getElementById("ae-import-status").innerHTML =
+          `<span style="color:var(--green);">Imported ${added} event(s)</span> · roster ${store.roster.length} athletes`;
+        toast(added ? "Events imported" : "No new events (already loaded?)");
+        if (added) {
+          setTimeout(() => renderHome(), 600);
+        }
       } catch (err) {
         alert("Could not import: " + (err.message || err));
       }
+      e.target.value = "";
     });
 
+    function fillDemoEvent() {
+      document.getElementById("ae-name").value = "Scrimmage Dual vs Demo";
+      document.getElementById("ae-date").value = new Date().toISOString().slice(0, 10);
+      document.getElementById("ae-division").value = "Boys";
+      document.getElementById("ae-style").value = "Folkstyle";
+      document.getElementById("ae-opponent-team").value = "Demo High";
+      document.getElementById("ae-level").value = "Varsity";
+      toast("Demo fields filled");
+    }
+
+    function createCustomEvent() {
+      const name = document.getElementById("ae-name").value.trim();
+      const date = document.getElementById("ae-date").value || new Date().toISOString().slice(0, 10);
+      const division = document.getElementById("ae-division").value;
+      const style = document.getElementById("ae-style").value || "Folkstyle";
+      const opponentTeam = document.getElementById("ae-opponent-team").value.trim();
+      const level = document.getElementById("ae-level").value;
+      if (!name) return alert("Enter an event name.");
+
+      let roster = (store.roster || []).filter(w => !w.quit);
+      if (division && division !== "Both") {
+        roster = roster.filter(w => w.division === division || !w.division);
+      }
+      roster.sort((a, b) => (Number(a.weightClass) || 0) - (Number(b.weightClass) || 0));
+
+      // Seed full dual line; fill wrestler names from roster by weight when available
+      const weights = standardWeightsForDivision(division);
+      const matches = weights.map(w => {
+        const rw = roster.find(r => String(r.weightClass || "") === w);
+        return {
+          id: uid(),
+          weightClass: w,
+          wrestlerId: rw ? rw.id : null,
+          wrestlerName: rw ? (rw.name || "") : "",
+          opponent: "",
+          level: (rw && rw.level) || level,
+          status: "pending",
+          ourPoints: 0,
+          oppPoints: 0,
+          events: [],
+          package: null,
+          isStandardSlot: true
+        };
+      });
+
+      const ev = {
+        id: uid(),
+        name,
+        date,
+        division,
+        style,
+        opponentTeam,
+        level,
+        type: "Dual",
+        roster: roster.map(w => ({ id: w.id, name: w.name, weightClass: w.weightClass, level: w.level, division: w.division })),
+        opponentRoster: [],
+        matches
+      };
+      store.events.push(ev);
+      saveStore();
+      toast("Event created · " + matches.length + " weight classes · " + style);
+      openEvent(ev.id);
+    }
+
+    // ─── EVENT DETAIL ───────────────────────────────────────────────
+    // NFHS-style folkstyle dual weight classes
+    const WEIGHTS_BOYS = ["106","113","120","126","132","138","144","150","157","165","175","190","215","285"];
+    const WEIGHTS_GIRLS = ["100","105","110","115","120","125","130","135","140","145","155","170","190","235"];
+
+    function standardWeightsForDivision(division) {
+      const d = String(division || "Boys");
+      if (d === "Girls") return WEIGHTS_GIRLS.slice();
+      if (d === "Both") return WEIGHTS_BOYS.concat(WEIGHTS_GIRLS.filter(w => !WEIGHTS_BOYS.includes(w)));
+      return WEIGHTS_BOYS.slice();
+    }
+
+    function emptyMatchSlot(weightClass, level) {
+      return {
+        id: uid(),
+        weightClass: String(weightClass),
+        wrestlerId: null,
+        wrestlerName: "",
+        opponent: "",
+        level: level || "Varsity",
+        status: "pending",
+        ourPoints: 0,
+        oppPoints: 0,
+        events: [],
+        package: null,
+        isStandardSlot: true
+      };
+    }
+
+    /** Ensure event has a full dual line of weight-class slots; fill names from roster when possible. */
+    function ensureWeightSlots(ev) {
+      if (!ev) return;
+      if (!Array.isArray(ev.matches)) ev.matches = [];
+      const weights = standardWeightsForDivision(ev.division);
+      const level = ev.level || "Varsity";
+      const roster = (ev.roster && ev.roster.length) ? ev.roster : (store.roster || []);
+
+      // Index existing matches by weight (keep all, including extras / exhibitions)
+      const byWeight = {};
+      ev.matches.forEach(m => {
+        const w = String(m.weightClass || "");
+        if (!w) return;
+        if (!byWeight[w]) byWeight[w] = m;
+      });
+
+      const filled = [];
+      weights.forEach(w => {
+        if (byWeight[w]) {
+          filled.push(byWeight[w]);
+          delete byWeight[w];
+        } else {
+          // New standard slot — try roster match by weight
+          const rw = roster.find(r => String(r.weightClass || "") === w && !r.quit);
+          const slot = emptyMatchSlot(w, (rw && rw.level) || level);
+          if (rw) {
+            slot.wrestlerId = rw.id || null;
+            slot.wrestlerName = rw.name || "";
+          }
+          filled.push(slot);
+        }
+      });
+
+      // Keep any remaining matches (extra weights, exhibitions, second entries)
+      ev.matches.forEach(m => {
+        const w = String(m.weightClass || "");
+        if (w && byWeight[w] === m) {
+          filled.push(m);
+          delete byWeight[w];
+        } else if (!w || !weights.includes(w)) {
+          // already handled or extra — if not in filled yet
+          if (!filled.includes(m)) filled.push(m);
+        }
+      });
+      // Any leftover byWeight entries
+      Object.keys(byWeight).forEach(w => {
+        if (!filled.includes(byWeight[w])) filled.push(byWeight[w]);
+      });
+
+      ev.matches = filled;
+    }
+
+    function setLevelFilter(lvl) {
+      levelFilter = lvl;
+      document.querySelectorAll("#level-filter .filter-chip").forEach(c => {
+        c.classList.toggle("active", c.getAttribute("data-level") === lvl);
+      });
+      renderEvent();
+    }
+
+    function displayName(n) {
+      const s = String(n || "").trim();
+      return s || "Unknown";
+    }
+
+    /** Folkstyle dual team points from a scored bout */
+    function dualTeamPointsForMatch(m) {
+      if (!m || m.status !== "scored") return { our: 0, opp: 0, result: "pending" };
+      // Exhibition matches don't count toward dual score
+      if (String(m.level || "").toLowerCase() === "exhibition") {
+        return { our: 0, opp: 0, result: matchWinner(m) };
+      }
+      if (typeof m.teamOur === "number" || typeof m.teamOpp === "number") {
+        return {
+          our: m.teamOur || 0,
+          opp: m.teamOpp || 0,
+          result: matchWinner(m)
+        };
+      }
+      const computed = computeDualTeamPoints(m.ourPoints || 0, m.oppPoints || 0, m.events || []);
+      return { our: computed.our, opp: computed.opp, result: computed.result };
+    }
+
+    function matchWinner(m) {
+      const a = m.ourPoints || 0;
+      const b = m.oppPoints || 0;
+      if (a > b) return "win-us";
+      if (b > a) return "win-opp";
+      // Pin can win with 0-0 board if only pin recorded
+      const pin = (m.events || []).find(e => /Pin\s*\/\s*Fall/i.test(e.move || ""));
+      if (pin) return pin.direction === "offense" ? "win-us" : "win-opp";
+      return "tie";
+    }
+
+    function computeDualTeamPoints(ourP, oppP, events) {
+      const pin = (events || []).find(e => /Pin\s*\/\s*Fall/i.test(e.move || "") || /Fall/i.test(e.detail || ""));
+      if (pin) {
+        if (pin.direction === "offense") return { our: 6, opp: 0, result: "win-us" };
+        return { our: 0, opp: 6, result: "win-opp" };
+      }
+      const diff = ourP - oppP;
+      if (diff === 0) return { our: 0, opp: 0, result: "tie" };
+      if (diff > 0) {
+        if (diff >= 15) return { our: 5, opp: 0, result: "win-us" }; // tech
+        if (diff >= 8) return { our: 4, opp: 0, result: "win-us" };  // major
+        return { our: 3, opp: 0, result: "win-us" };                 // decision
+      }
+      const d = -diff;
+      if (d >= 15) return { our: 0, opp: 5, result: "win-opp" };
+      if (d >= 8) return { our: 0, opp: 4, result: "win-opp" };
+      return { our: 0, opp: 3, result: "win-opp" };
+    }
+
+    function renderEvent() {
+      const ev = store.events.find(e => e.id === currentEventId);
+      if (!ev) { renderHome(); return; }
+
+      // Always show full dual weight line for this division
+      ensureWeightSlots(ev);
+      saveStore();
+
+      document.getElementById("ev-title").textContent = ev.name;
+      document.getElementById("ev-meta").textContent =
+        (ev.style || "Folkstyle") + " · " + (ev.division || "") + " · " + formatDayMonthYear(ev.date) +
+        (ev.opponentTeam ? " · vs " + ev.opponentTeam : "") +
+        " · folder: " + eventFolderName(ev.name, ev.date);
+
+      let matches = (ev.matches || []).slice();
+      if (levelFilter !== "Both") {
+        matches = matches.filter(m => m.level === levelFilter || (levelFilter === "Varsity" && !m.level));
+      }
+      // Standard weights first by number, then extras
+      const std = standardWeightsForDivision(ev.division);
+      matches.sort((a, b) => {
+        const aw = String(a.weightClass || "");
+        const bw = String(b.weightClass || "");
+        const ai = std.indexOf(aw);
+        const bi = std.indexOf(bw);
+        if (ai >= 0 && bi >= 0) return ai - bi;
+        if (ai >= 0) return -1;
+        if (bi >= 0) return 1;
+        return (Number(aw) || 999) - (Number(bw) || 999);
+      });
+
+      // Dual meet team score (Varsity + JV if filter is Both; respect filter)
+      let dualOur = 0, dualOpp = 0;
+      matches.forEach(m => {
+        const tp = dualTeamPointsForMatch(m);
+        dualOur += tp.our;
+        dualOpp += tp.opp;
+      });
+      document.getElementById("dual-our-lab").textContent = store.teamName || "Us";
+      document.getElementById("dual-opp-lab").textContent = ev.opponentTeam || "Opponent";
+      document.getElementById("dual-our-pts").textContent = String(dualOur);
+      document.getElementById("dual-opp-pts").textContent = String(dualOpp);
+
+      const host = document.getElementById("wc-list");
+      if (!matches.length) {
+        host.innerHTML = `<p class="muted" style="padding:12px 0;">No weight classes. Tap + Add match.</p>`;
+      } else {
+        host.innerHTML = matches.map(m => {
+          const scored = m.status === "scored";
+          const isExtra = !std.includes(String(m.weightClass || ""));
+          const tp = dualTeamPointsForMatch(m);
+          let resultClass = "pending";
+          if (scored) resultClass = tp.result || matchWinner(m);
+          if (isExtra && !scored) resultClass = "extra pending";
+
+          let scoreHtml;
+          if (scored) {
+            const teamBit = (tp.our || tp.opp)
+              ? ` · +${tp.our || tp.opp} team`
+              : "";
+            scoreHtml = `<div class="wc-score">${m.ourPoints}–${m.oppPoints}${teamBit ? "" : ""}</div>`;
+            // show team points under sub instead
+          } else {
+            scoreHtml = `<div class="wc-score pending">Edit → Score</div>`;
+          }
+          const us = displayName(m.wrestlerName);
+          const them = displayName(m.opponent);
+          const teamNote = scored && (tp.our || tp.opp)
+            ? ` · dual +${Math.max(tp.our, tp.opp)}`
+            : "";
+          return `<button type="button" class="wc-row ${resultClass}" onclick="onWeightClick('${m.id}')">
+            <div class="wc-weight">${escHtml(m.weightClass || "—")}</div>
+            <div class="wc-info">
+              <div class="wc-name">${escHtml(us)} vs ${escHtml(them)}</div>
+              <div class="wc-sub">${escHtml(m.level || "Varsity")}${scored ? " · " + m.ourPoints + "–" + m.oppPoints + teamNote : (isExtra ? " · extra" : "")}</div>
+            </div>
+            ${scoreHtml}
+          </button>`;
+        }).join("");
+      }
+      showScreen("screen-event");
+    }
+
+    function onWeightClick(matchId) {
+      const ev = store.events.find(e => e.id === currentEventId);
+      if (!ev) return;
+      const m = (ev.matches || []).find(x => x.id === matchId);
+      if (!m) return;
+
+      if (m.status === "scored") {
+        // Review
+        reviewMatch = { event: ev, match: m };
+        pushNav("review");
+        renderReview();
+        return;
+      }
+      // Setup / validate then live
+      openMatchSetup(matchId);
+    }
+
+    function showAddMatch() {
+      openMatchSetup(null);
+    }
+
+    function openMatchSetup(matchId) {
+      currentMatchId = matchId;
+      const ev = store.events.find(e => e.id === currentEventId);
+      if (!ev) return;
+
+      document.getElementById("ms-title").textContent = matchId ? "Edit names · start live" : "Add match (extra / exhibition)";
+
+      // Roster datalist
+      const dl = document.getElementById("ms-roster-list");
+      dl.innerHTML = "";
+      const roster = (ev.roster && ev.roster.length) ? ev.roster : (store.roster || []);
+      roster.forEach(w => {
+        const opt = document.createElement("option");
+        opt.value = w.name || "";
+        dl.appendChild(opt);
+      });
+      const odl = document.getElementById("ms-opp-list");
+      odl.innerHTML = "";
+      (ev.opponentRoster || []).forEach(o => {
+        const opt = document.createElement("option");
+        opt.value = o.name || "";
+        odl.appendChild(opt);
+      });
+
+      if (matchId) {
+        const m = (ev.matches || []).find(x => x.id === matchId);
+        if (m) {
+          document.getElementById("ms-weight").value = m.weightClass || "";
+          document.getElementById("ms-level").value = m.level || "Varsity";
+          document.getElementById("ms-wrestler").value = m.wrestlerName || "";
+          document.getElementById("ms-opponent").value = m.opponent || "";
+        }
+      } else {
+        document.getElementById("ms-weight").value = "";
+        document.getElementById("ms-level").value = ev.level || "Varsity";
+        document.getElementById("ms-wrestler").value = "";
+        document.getElementById("ms-opponent").value = "";
+      }
+
+      pushNav("match-setup");
+      showScreen("screen-match-setup");
+    }
+
+    function cancelMatchSetup() {
+      goBack();
+    }
+
+    function confirmMatchAndGoLive() {
+      const ev = store.events.find(e => e.id === currentEventId);
+      if (!ev) return;
+
+      const weight = document.getElementById("ms-weight").value.trim();
+      const level = document.getElementById("ms-level").value;
+      const wrestlerName = document.getElementById("ms-wrestler").value.trim();
+      const opponent = document.getElementById("ms-opponent").value.trim() || "Opponent";
+
+      if (!wrestlerName) return alert("Enter our wrestler name.");
+      if (!weight) return alert("Enter weight class.");
+
+      let match;
+      if (currentMatchId) {
+        match = (ev.matches || []).find(x => x.id === currentMatchId);
+        if (match) {
+          match.weightClass = weight;
+          match.level = level;
+          match.wrestlerName = wrestlerName;
+          match.opponent = opponent;
+          // Try to keep wrestlerId if name matches roster
+          const r = (ev.roster || store.roster || []).find(w => w.name === wrestlerName);
+          if (r) match.wrestlerId = r.id;
+        }
+      } else {
+        match = {
+          id: uid(),
+          weightClass: weight,
+          wrestlerId: null,
+          wrestlerName,
+          opponent,
+          level,
+          status: "pending",
+          ourPoints: 0,
+          oppPoints: 0,
+          events: [],
+          package: null
+        };
+        const r = (ev.roster || store.roster || []).find(w => w.name === wrestlerName);
+        if (r) match.wrestlerId = r.id;
+        if (!ev.matches) ev.matches = [];
+        ev.matches.push(match);
+        currentMatchId = match.id;
+      }
+      saveStore();
+      startLiveMatchFromSetup(ev, match);
+    }
+
+    // ─── LIVE SCORING ───────────────────────────────────────────────
     async function getCameraStream() {
       if (mediaStream) {
         mediaStream.getTracks().forEach(t => t.stop());
@@ -510,19 +1424,6 @@
       throw lastErr || new Error("Could not open camera");
     }
 
-    async function previewCamera() {
-      try {
-        const stream = await getCameraStream();
-        const v = document.getElementById("preview-video");
-        v.srcObject = stream;
-        v.style.display = "block";
-        await v.play();
-        toast("Camera ready");
-      } catch (err) {
-        alert("Camera permission needed: " + (err.message || err));
-      }
-    }
-
     function pickMimeType() {
       const types = [
         "video/webm;codecs=vp9,opus",
@@ -536,106 +1437,38 @@
       return "";
     }
 
-    let setupMode = "custom"; // custom | import — default custom for easy testing
-
-    function setSetupMode(mode) {
-      setupMode = mode === "import" ? "import" : "custom";
-      document.getElementById("setup-import").style.display = setupMode === "import" ? "block" : "none";
-      document.getElementById("setup-custom").style.display = setupMode === "custom" ? "block" : "none";
-      const ib = document.getElementById("mode-import-btn");
-      const cb = document.getElementById("mode-custom-btn");
-      if (ib && cb) {
-        ib.className = "btn " + (setupMode === "import" ? "btn-gold" : "btn-ghost");
-        cb.className = "btn " + (setupMode === "custom" ? "btn-gold" : "btn-ghost");
-        ib.style.marginTop = "0";
-        cb.style.marginTop = "0";
-      }
-      const meta = document.getElementById("top-meta");
-      if (setupMode === "custom") {
-        meta.innerHTML = "<strong>Custom / test</strong><br/>manual entry";
-      } else if (sync && sync.season) {
-        meta.innerHTML = `<strong>${sync.season.name}</strong><br/>${(sync.roster||[]).length} athletes`;
-      }
-    }
-
-    function fillDemoCustom() {
-      setSetupMode("custom");
-      const today = new Date().toISOString().slice(0, 10);
-      document.getElementById("custom-team").value = "Test High";
-      document.getElementById("custom-event").value = "Scrimmage Dual vs Demo";
-      document.getElementById("custom-date").value = today;
-      document.getElementById("custom-division").value = "Boys";
-      document.getElementById("custom-wrestler").value = "Alex Test";
-      document.getElementById("custom-weight").value = "132";
-      document.getElementById("inp-opponent").value = "Jordan Opp";
-      document.getElementById("sel-level").value = "Varsity";
-      toast("Demo fields filled");
-    }
-
-    async function startLiveMatch() {
-      const opponent = document.getElementById("inp-opponent").value.trim() || "Opponent";
-      const level = document.getElementById("sel-level").value;
-
-      let boutId, wrestlerId, wrestlerName, weightClass, boutMeta, seasonMeta, teamName;
-
-      if (setupMode === "import") {
-        if (!sync) return alert("Import a Mat Scout season first, or switch to Custom / test.");
-        boutId = document.getElementById("sel-bout").value;
-        wrestlerId = document.getElementById("sel-wrestler").value;
-        if (!boutId) return alert("Select an event.");
-        if (!wrestlerId) return alert("Select our wrestler.");
-        const w = (sync.roster || []).find(r => r.id === wrestlerId);
-        const bout = (sync.bouts || []).find(b => b.id === boutId);
-        wrestlerName = w ? w.name : "Athlete";
-        weightClass = w ? String(w.weightClass || "") : "";
-        boutMeta = bout || null;
-        seasonMeta = sync.season;
-        teamName = sync.teamName || "";
-      } else {
-        wrestlerName = document.getElementById("custom-wrestler").value.trim();
-        weightClass = document.getElementById("custom-weight").value.trim();
-        const eventName = document.getElementById("custom-event").value.trim() || "Test Event";
-        const eventDate = document.getElementById("custom-date").value || new Date().toISOString().slice(0, 10);
-        const division = document.getElementById("custom-division").value || "Boys";
-        teamName = document.getElementById("custom-team").value.trim() || "Test Team";
-        if (!wrestlerName) return alert("Enter our wrestler name (or tap Fill demo test data).");
-        wrestlerId = "custom_" + Math.random().toString(36).slice(2, 8);
-        boutId = "custom_bout_" + Math.random().toString(36).slice(2, 8);
-        boutMeta = {
-          id: boutId,
-          date: eventDate,
-          type: "Dual",
-          division,
-          opponentTeam: eventName,
-          competitionLevel: level
-        };
-        seasonMeta = {
-          id: "custom_season",
-          name: teamName + " — Test",
-          style: "Folkstyle"
-        };
-      }
-
+    async function startLiveMatchFromSetup(ev, match) {
       live = {
-        boutId,
-        wrestlerId,
-        wrestlerName,
-        opponent,
-        level,
-        weightClass,
+        boutId: ev.id,
+        wrestlerId: match.wrestlerId,
+        wrestlerName: match.wrestlerName,
+        opponent: match.opponent,
+        level: match.level,
+        weightClass: match.weightClass,
+        style: ev.style || (store.seasonMeta && store.seasonMeta.style) || "Folkstyle",
         period: "P1",
         events: [],
         ourP: 0,
         oppP: 0,
-        boutMeta: boutMeta || null,
-        seasonMeta: seasonMeta || null,
-        teamName: teamName || ""
+        penOur: 0,
+        penOpp: 0,
+        dq: null,
+        eventId: ev.id,
+        matchId: match.id,
+        boutMeta: {
+          id: ev.id,
+          date: ev.date,
+          type: ev.type || "Dual",
+          division: ev.division,
+          opponentTeam: ev.opponentTeam,
+          style: ev.style || "Folkstyle"
+        },
+        seasonMeta: store.seasonMeta,
+        teamName: store.teamName || ""
       };
-
       resetPositionState();
 
       try {
-        // Show live screen first so video element is visible/laid out
         showScreen("screen-live");
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
@@ -646,9 +1479,7 @@
         liveVid.muted = true;
         liveVid.playsInline = true;
         liveVid.srcObject = stream;
-        // Force play — critical on iOS
         try { await liveVid.play(); } catch (playErr) {
-          console.warn("video play", playErr);
           try { await liveVid.play(); } catch (e2) {}
         }
 
@@ -665,15 +1496,21 @@
         };
         mediaRecorder.start(1000);
         recording = true;
+        recPaused = false;
+        pausedAccumMs = 0;
+        pauseStartedAt = 0;
         recordStartedAt = Date.now();
         matchStartedAt = Date.now();
         startRecClock();
       } catch (err) {
         if (!confirm("Could not start camera/recording (" + (err.message || err) + ").\n\nScore without video?")) {
-          showScreen("screen-setup");
+          showScreen("screen-event");
           return;
         }
         recording = false;
+        recPaused = false;
+        pausedAccumMs = 0;
+        pauseStartedAt = 0;
         recordStartedAt = Date.now();
         matchStartedAt = Date.now();
         startRecClock();
@@ -691,45 +1528,160 @@
       toast("Live match started");
     }
 
+    function formatMmSs(sec) {
+      sec = Math.max(0, Math.floor(sec || 0));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }
+
     function startRecClock() {
       clearInterval(recTimer);
       recTimer = setInterval(() => {
-        const t = formatMmSs((Date.now() - recordStartedAt) / 1000);
         const badge = document.getElementById("rec-badge");
-        if (badge) {
-          badge.textContent = (recording ? "● REC " : "SCORE ") + t;
+        if (!badge) return;
+        if (!recording) {
+          badge.textContent = "SCORE " + formatMmSs(effectiveRecordSec());
+          badge.classList.remove("paused");
+          return;
         }
+        if (recPaused) {
+          const sec = (live && live._frozenRecSec != null) ? live._frozenRecSec : effectiveRecordSec();
+          badge.textContent = "❚❚ PAUSED " + formatMmSs(sec);
+          badge.classList.add("paused");
+          return;
+        }
+        badge.textContent = "● REC " + formatMmSs(effectiveRecordSec());
+        badge.classList.remove("paused");
       }, 250);
     }
 
-    const PERIODS = ["P1", "P2", "P3", "OT"];
+    function effectiveRecordSec() {
+      if (!recordStartedAt) return 0;
+      if (recPaused && live && live._frozenRecSec != null) return live._frozenRecSec;
+      let ms = Date.now() - recordStartedAt - (pausedAccumMs || 0);
+      if (recPaused && pauseStartedAt) ms -= (Date.now() - pauseStartedAt);
+      return Math.max(0, ms / 1000);
+    }
 
-    // Position state machine
-    // position: neutral | top_our | top_opp | nf_our | nf_opp
-    // choicePhase: null | pick_wrestler | pick_position | defer_other
-    // choiceFor: 'our' | 'opp' — who is choosing when in choice flow
+    function videoTimestamp() {
+      return formatMmSs(effectiveRecordSec());
+    }
+
+    function toggleRecordingPause() {
+      if (!recording) {
+        toast("Not recording");
+        return;
+      }
+      const badge = document.getElementById("rec-badge");
+      try {
+        if (!recPaused) {
+          const frozen = effectiveRecordSec();
+          if (mediaRecorder && mediaRecorder.state === "recording" && typeof mediaRecorder.pause === "function") {
+            mediaRecorder.pause();
+          }
+          recPaused = true;
+          pauseStartedAt = Date.now();
+          live._frozenRecSec = frozen;
+          if (badge) {
+            badge.textContent = "❚❚ PAUSED " + formatMmSs(frozen);
+            badge.classList.add("paused");
+          }
+          toast("Recording paused");
+        } else {
+          if (mediaRecorder && mediaRecorder.state === "paused" && typeof mediaRecorder.resume === "function") {
+            mediaRecorder.resume();
+          }
+          if (pauseStartedAt) {
+            pausedAccumMs += Date.now() - pauseStartedAt;
+            pauseStartedAt = 0;
+          }
+          recPaused = false;
+          live._frozenRecSec = null;
+          if (badge) {
+            badge.textContent = "● REC " + formatMmSs(effectiveRecordSec());
+            badge.classList.remove("paused");
+          }
+          toast("Recording resumed");
+        }
+      } catch (e) {
+        if (!recPaused) {
+          const frozen = effectiveRecordSec();
+          recPaused = true;
+          pauseStartedAt = Date.now();
+          live._frozenRecSec = frozen;
+          if (badge) {
+            badge.textContent = "❚❚ PAUSED " + formatMmSs(frozen);
+            badge.classList.add("paused");
+          }
+          toast("Paused");
+        } else {
+          if (pauseStartedAt) {
+            pausedAccumMs += Date.now() - pauseStartedAt;
+            pauseStartedAt = 0;
+          }
+          recPaused = false;
+          live._frozenRecSec = null;
+          if (badge) {
+            badge.textContent = "● REC " + formatMmSs(effectiveRecordSec());
+            badge.classList.remove("paused");
+          }
+          toast("Resumed");
+        }
+      }
+    }
+
+    // Regulation + sudden victory OT + ride-out style OT2+
+    const PERIODS = ["P1", "P2", "P3", "OT", "OT2", "OT3"];
 
     function resetPositionState() {
       live.position = "neutral";
       live.choicePhase = null;
       live.choiceFor = null;
       live.pendingChoice = null;
+      live.lastChooser = null;
+    }
+
+    function isInternationalStyle() {
+      const s = (live && live.style) || "Folkstyle";
+      return s === "Freestyle" || s === "Greco-Roman";
     }
 
     function cyclePeriod() {
       const idx = PERIODS.indexOf(live.period);
-      const next = PERIODS[(idx < 0 ? 0 : idx + 1) % PERIODS.length];
+      let next;
+      if (idx < 0) next = "P1";
+      else if (idx < PERIODS.length - 1) next = PERIODS[idx + 1];
+      else next = "OT" + (parseInt(String(live.period).replace(/\D/g, "") || "3", 10) + 1); // OT4+
+
       live.period = next;
       const btn = document.getElementById("period-btn");
       if (btn) btn.textContent = next;
-      // Period change → choice flow
-      live.choicePhase = "pick_wrestler";
-      live.choiceFor = null;
-      live.pendingChoice = null;
-      // Reset to neutral for new period (choice will set top/bottom/neutral)
       live.position = "neutral";
+
+      // First OT (sudden victory): both start neutral — no positional choice
+      if (next === "OT") {
+        live.choicePhase = null;
+        live.choiceFor = null;
+        toast("OT — sudden victory · neutral");
+        renderOverlayControls();
+        return;
+      }
+
+      // OT2+ (and P2/P3): positional choice
+      // Between regulation periods and OT2+: alternate chooser
+      if (live.lastChooser === "our" || live.lastChooser === "opp") {
+        const auto = live.lastChooser === "our" ? "opp" : "our";
+        live.choiceFor = auto;
+        live.choicePhase = "pick_position";
+        const name = auto === "our" ? (live.wrestlerName || "Us") : (live.opponent || "Opp");
+        toast(next + " — choice: " + name);
+      } else {
+        live.choicePhase = "pick_wrestler";
+        live.choiceFor = null;
+        toast(next + " — choose who has choice");
+      }
       renderOverlayControls();
-      toast(next + " — choose who has choice");
     }
 
     function setPeriod(p) {
@@ -739,30 +1691,26 @@
     }
 
     function chooseWrestler(who) {
-      // who: 'our' | 'opp'
       live.choiceFor = who;
       live.choicePhase = "pick_position";
       renderOverlayControls();
     }
 
     function choosePosition(pos) {
-      // pos: top | bottom | neutral | defer
-      const who = live.choiceFor; // our | opp
+      const who = live.choiceFor;
       if (pos === "defer") {
-        // other wrestler gets the choice
         live.choiceFor = who === "our" ? "opp" : "our";
         live.choicePhase = "pick_position";
         toast("Deferred — other wrestler chooses");
         renderOverlayControls();
         return;
       }
+      live.lastChooser = who;
       if (pos === "neutral") {
         live.position = "neutral";
       } else if (pos === "top") {
-        // chooser starts on top
         live.position = who === "our" ? "top_our" : "top_opp";
       } else if (pos === "bottom") {
-        // chooser starts on bottom → other is top
         live.position = who === "our" ? "top_opp" : "top_our";
       }
       live.choicePhase = null;
@@ -775,7 +1723,7 @@
       const isPenalty = category === "Penalty/DQ";
       let ourDelta = 0, oppDelta = 0;
       if (isPenalty) {
-        if (direction === "offense") oppDelta = points; // we stalled → opp scores
+        if (direction === "offense") oppDelta = points;
         else ourDelta = points;
       } else if (move === "Pin / Fall") {
         // no board points
@@ -803,20 +1751,16 @@
       document.getElementById("live-our-pts").textContent = String(live.ourP);
       document.getElementById("live-opp-pts").textContent = String(live.oppP);
 
-      // Position transitions after scoring
       if (!isPenalty && move !== "Pin / Fall") {
         if (category === "Takedown" || move === "Takedown") {
-          // scorer goes on top
           live.position = direction === "offense" ? "top_our" : "top_opp";
         } else if (category === "Escape" || move === "Escape") {
           live.position = "neutral";
         } else if (category === "Reversal" || move === "Reversal") {
-          // bottom becomes top
           live.position = direction === "offense" ? "top_our" : "top_opp";
         } else if (opts.enterNf) {
           live.position = direction === "offense" ? "nf_our" : "nf_opp";
         } else if (opts.nfPoints) {
-          // after awarding NF points, stay on top for that wrestler
           live.position = direction === "offense" ? "top_our" : "top_opp";
         }
       }
@@ -830,11 +1774,21 @@
       if (!ev) return toast("Nothing to undo");
       live.ourP = 0;
       live.oppP = 0;
+      live.penOur = 0;
+      live.penOpp = 0;
+      live.dq = null;
       live.events.forEach(e => {
         const isPenalty = e.category === "Penalty/DQ";
         if (isPenalty) {
-          if (e.direction === "offense") live.oppP += e.points || 0;
-          else live.ourP += e.points || 0;
+          if (e.direction === "offense") {
+            live.penOur += 1;
+            live.oppP += e.points || 0;
+            if (e.outcome === "dq") live.dq = "our";
+          } else {
+            live.penOpp += 1;
+            live.ourP += e.points || 0;
+            if (e.outcome === "dq") live.dq = "opp";
+          }
         } else if (e.move !== "Pin / Fall") {
           if (e.direction === "offense") live.ourP += e.points || 0;
           else live.oppP += e.points || 0;
@@ -842,7 +1796,6 @@
       });
       document.getElementById("live-our-pts").textContent = String(live.ourP);
       document.getElementById("live-opp-pts").textContent = String(live.oppP);
-      // crude position restore: last non-penalty scoring event
       live.position = "neutral";
       for (let i = live.events.length - 1; i >= 0; i--) {
         const e = live.events[i];
@@ -856,7 +1809,7 @@
           live.position = "neutral";
           break;
         }
-        if (/Near Fall|N2|N3|N4|NF/i.test(e.move || "")) {
+        if (/Near Fall|N2|N3|N4|NF|Exposure/i.test(e.move || "")) {
           live.position = e.direction === "offense" ? "top_our" : "top_opp";
           break;
         }
@@ -882,123 +1835,323 @@
       }
     }
 
+    function isLandscape() {
+      return window.matchMedia && window.matchMedia("(orientation: landscape)").matches;
+    }
+
+    function chunk3(arr) {
+      const rows = [];
+      for (let i = 0; i < arr.length; i += 3) rows.push(arr.slice(i, i + 3));
+      return rows.length ? rows : [[]];
+    }
+
+    function btnHtml(b) {
+      return `<button type="button" class="ov-btn ${b.cls || ""}" onclick="${b.onclick}">${b.label}</button>`;
+    }
+
+    function layoutSides(leftBtns, rightBtns, midHtml, portraitHtml) {
+      if (!isLandscape()) return portraitHtml;
+      const lRows = chunk3(leftBtns);
+      const rRows = chunk3(rightBtns);
+      const n = Math.max(lRows.length, rRows.length);
+      let html = `<div class="side-board-stack">`;
+      for (let i = 0; i < n; i++) {
+        const L = lRows[i] || [];
+        const R = rRows[i] || [];
+        html += `<div class="side-board">
+          <div class="side-col left">${L.map(btnHtml).join("")}</div>
+          <div class="side-mid">${i === n - 1 ? (midHtml || "") : ""}</div>
+          <div class="side-col right">${R.map(btnHtml).join("")}</div>
+        </div>`;
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    function allowDefer() {
+      // No defer into period 3 (between P2 and P3); OT choice allows defer
+      return live.period !== "P3";
+    }
+
+    /** Next penalty points for the wrestler who committed it (1st/2nd=1, 3rd=2, 4th=DQ) */
+    function nextPenaltyAward(who) {
+      // who: 'our' | 'opp' — the one being penalized
+      const count = (who === "our" ? (live.penOur || 0) : (live.penOpp || 0)) + 1;
+      if (count >= 4) return { points: 0, count, dq: true };
+      if (count === 3) return { points: 2, count, dq: false };
+      return { points: 1, count, dq: false };
+    }
+
+    function addPenalty(direction) {
+      // direction offense = our wrestler penalized → opp scores
+      // direction defense = opponent penalized → we score
+      const who = direction === "offense" ? "our" : "opp";
+      const award = nextPenaltyAward(who);
+      if (who === "our") live.penOur = award.count;
+      else live.penOpp = award.count;
+
+      if (award.dq) {
+        live.dq = who;
+        const move = who === "our" ? "DQ (4th penalty)" : "Opp DQ (4th penalty)";
+        // Award match to the other side via DQ flag; no board points required
+        const ev = {
+          id: Math.random().toString(36).slice(2, 9),
+          period: live.period,
+          category: "Penalty/DQ",
+          move: "Disqualification",
+          direction,
+          outcome: "dq",
+          points: 0,
+          timestamp: videoTimestamp(),
+          detail: "4th penalty — DQ (" + award.count + ")",
+          source: "mat-side-live",
+          ts: Date.now()
+        };
+        live.events.push(ev);
+        toast(who === "our" ? "DQ — Us (4th penalty)" : "DQ — Opponent (4th penalty)");
+        renderOverlayControls();
+        return;
+      }
+
+      const pts = award.points;
+      const label = award.count === 3 ? "Penalty (3rd · 2 pts)" : "Penalty (" + award.count + ")";
+      addScore(direction, "Penalty/DQ", label, pts, { detail: "penalty #" + award.count, skipPenCount: true });
+      toast((who === "our" ? "Us" : "Opp") + " penalty #" + award.count + " · +" + pts);
+    }
+
+    function posLabelClass() {
+      if (live.choicePhase === "pick_wrestler" || live.choicePhase === "pick_position") return "pos-choice";
+      switch (live.position) {
+        case "top_our":
+        case "nf_our":
+          return "pos-our";
+        case "top_opp":
+        case "nf_opp":
+          return "pos-opp";
+        case "neutral":
+        default:
+          return "pos-neutral";
+      }
+    }
+
     function renderOverlayControls() {
       const host = document.getElementById("overlay-controls");
       const label = document.getElementById("pos-label");
-      if (label) label.textContent = posLabelText();
+      if (label) {
+        label.textContent = posLabelText();
+        label.className = "pos-label " + posLabelClass();
+      }
       if (!host) return;
 
-      // Choice flows
       if (live.choicePhase === "pick_wrestler") {
-        host.innerHTML = `
-          <div class="ov-grid g2">
+        const left = [{ label: escHtml(shortName(live.wrestlerName, "Us")), cls: "our", onclick: "chooseWrestler('our')" }];
+        const right = [{ label: escHtml(shortName(live.opponent, "Opp")), cls: "opp", onclick: "chooseWrestler('opp')" }];
+        const portrait = `<div class="ov-grid g2">
             <button type="button" class="ov-btn our" onclick="chooseWrestler('our')">${escHtml(shortName(live.wrestlerName, "Us"))}</button>
             <button type="button" class="ov-btn opp" onclick="chooseWrestler('opp')">${escHtml(shortName(live.opponent, "Opp"))}</button>
           </div>`;
+        host.innerHTML = layoutSides(left, right, "", portrait);
         return;
       }
+
       if (live.choicePhase === "pick_position") {
-        host.innerHTML = `
-          <div class="ov-grid g2">
+        const deferBtn = allowDefer()
+          ? `<button type="button" class="ov-btn gold" onclick="choosePosition('defer')">Defer</button>`
+          : "";
+        const portrait = `<div class="ov-grid g2">
             <button type="button" class="ov-btn gold" onclick="choosePosition('top')">Top</button>
             <button type="button" class="ov-btn gold" onclick="choosePosition('bottom')">Bottom</button>
             <button type="button" class="ov-btn gold" onclick="choosePosition('neutral')">Neutral</button>
-            <button type="button" class="ov-btn ghost" onclick="choosePosition('defer')">Defer</button>
+            ${deferBtn}
           </div>`;
+        const choices = [
+          { label: "Top", cls: "gold", onclick: "choosePosition('top')" },
+          { label: "Bottom", cls: "gold", onclick: "choosePosition('bottom')" },
+          { label: "Neutral", cls: "gold", onclick: "choosePosition('neutral')" }
+        ];
+        if (allowDefer()) choices.push({ label: "Defer", cls: "gold", onclick: "choosePosition('defer')" });
+        if (isLandscape()) {
+          const mid = choices.map(btnHtml).join("");
+          host.innerHTML = `<div class="side-board"><div class="side-col left"></div><div class="side-mid">${mid}</div><div class="side-col right"></div></div>`;
+        } else {
+          host.innerHTML = portrait;
+        }
         return;
       }
 
       const pos = live.position || "neutral";
 
-      // Near-fall point selection
       if (pos === "nf_our") {
-        host.innerHTML = `
-          <div class="ov-grid g3">
+        const left = [
+          { label: "N2", cls: "our", onclick: "addScore('offense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})" },
+          { label: "N3", cls: "our", onclick: "addScore('offense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})" },
+          { label: "N4", cls: "our", onclick: "addScore('offense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})" }
+        ];
+        const portrait = `<div class="ov-grid g3">
             <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})">N2</button>
             <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})">N3</button>
             <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})">N4</button>
           </div>
-          <div class="mini-row">
-            <button type="button" class="ov-btn ghost" onclick="live.position='top_our'; renderOverlayControls()">Cancel NF</button>
-          </div>`;
+          <div class="mini-row"><button type="button" class="ov-btn ghost" onclick="live.position='top_our'; renderOverlayControls()">Cancel NF</button></div>`;
+        const mid = `<button type="button" class="ov-btn ghost" onclick="live.position='top_our'; renderOverlayControls()">Cancel NF</button>`;
+        host.innerHTML = layoutSides(left, [], mid, portrait);
         return;
       }
       if (pos === "nf_opp") {
-        host.innerHTML = `
-          <div class="ov-grid g3">
+        const right = [
+          { label: "N2", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})" },
+          { label: "N3", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})" },
+          { label: "N4", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})" }
+        ];
+        const portrait = `<div class="ov-grid g3">
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','2-Point NF',2,{nfPoints:1})">N2</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','3-Point NF',3,{nfPoints:1})">N3</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','4-Point NF',4,{nfPoints:1})">N4</button>
           </div>
-          <div class="mini-row">
-            <button type="button" class="ov-btn ghost" onclick="live.position='top_opp'; renderOverlayControls()">Cancel NF</button>
-          </div>`;
+          <div class="mini-row"><button type="button" class="ov-btn ghost" onclick="live.position='top_opp'; renderOverlayControls()">Cancel NF</button></div>`;
+        const mid = `<button type="button" class="ov-btn ghost" onclick="live.position='top_opp'; renderOverlayControls()">Cancel NF</button>`;
+        host.innerHTML = layoutSides([], right, mid, portrait);
         return;
       }
 
       if (pos === "neutral") {
-        // Only T3 and P per wrestler
-        host.innerHTML = `
-          <div class="ov-grid g2">
+        if (isInternationalStyle()) {
+          // Freestyle / Greco: takedown 2 or 4, exposure 2, passivity/penalty, fall
+          const left = [
+            { label: "T2", cls: "our", onclick: "addScore('offense','Takedown','Takedown',2)" },
+            { label: "T4", cls: "our", onclick: "addScore('offense','Takedown','Takedown 4',4)" },
+            { label: "EX2", cls: "our", onclick: "addScore('offense','Exposure','Exposure',2)" },
+            { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+          ];
+          const right = [
+            { label: "T2", cls: "opp", onclick: "addScore('defense','Takedown','Takedown',2)" },
+            { label: "T4", cls: "opp", onclick: "addScore('defense','Takedown','Takedown 4',4)" },
+            { label: "EX2", cls: "opp", onclick: "addScore('defense','Exposure','Exposure',2)" },
+            { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+          ];
+          const portrait = `<div class="ov-grid g2">
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Takedown','Takedown',2)">T2</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Takedown','Takedown',2)">T2</button>
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Takedown','Takedown 4',4)">T4</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Takedown','Takedown 4',4)">T4</button>
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Exposure','Exposure',2)">EX2</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Exposure','Exposure',2)">EX2</button>
+              <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+              <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
+            </div>
+            <div class="mini-row">
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Pin / Fall',0)">FALL</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Pin / Fall',0)">FALL</button>
+            </div>`;
+          host.innerHTML = layoutSides(left, right, "", portrait);
+          return;
+        }
+        // Folkstyle
+        const left = [
+          { label: "T3", cls: "our", onclick: "addScore('offense','Takedown','Takedown',3)" },
+          { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+        ];
+        const right = [
+          { label: "T3", cls: "opp", onclick: "addScore('defense','Takedown','Takedown',3)" },
+          { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+        ];
+        const portrait = `<div class="ov-grid g2">
             <button type="button" class="ov-btn our" onclick="addScore('offense','Takedown','Takedown',3)">T3</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Takedown','Takedown',3)">T3</button>
-            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
-            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
-          </div>
-          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
-            <span>Our · T3 / P (opp penalty)</span>
-            <span style="text-align:right;">Opp · T3 / P (our penalty)</span>
+            <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+            <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
           </div>`;
+        host.innerHTML = layoutSides(left, right, "", portrait);
         return;
       }
 
       if (pos === "top_our") {
-        // Our on top: NF, Pin, P | Bottom (opp): E1, R2, P
-        host.innerHTML = `
-          <div class="ov-grid g2">
+        if (isInternationalStyle()) {
+          const left = [
+            { label: "EX2", cls: "our", onclick: "addScore('offense','Exposure','Exposure',2)" },
+            { label: "FALL", cls: "our", onclick: "addScore('offense','Near Fall / Pin','Pin / Fall',0)" },
+            { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+          ];
+          const right = [
+            { label: "R2", cls: "opp", onclick: "addScore('defense','Reversal','Reversal',2)" },
+            { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+          ];
+          const portrait = `<div class="ov-grid g2">
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Exposure','Exposure',2)">EX2</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Reversal','Reversal',2)">R2</button>
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Pin / Fall',0)">FALL</button>
+              <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
+              <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+            </div>`;
+          host.innerHTML = layoutSides(left, right, "", portrait);
+          return;
+        }
+        const left = [
+          { label: "NF", cls: "our", onclick: "addScore('offense','Near Fall / Pin','Near Fall',0,{enterNf:1})" },
+          { label: "PIN", cls: "our", onclick: "addScore('offense','Near Fall / Pin','Pin / Fall',0)" },
+          { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+        ];
+        const right = [
+          { label: "E1", cls: "opp", onclick: "addScore('defense','Escape','Escape',1)" },
+          { label: "R2", cls: "opp", onclick: "addScore('defense','Reversal','Reversal',2)" },
+          { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+        ];
+        const portrait = `<div class="ov-grid g2">
             <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Near Fall',0,{enterNf:1})">NF</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Escape','Escape',1)">E1</button>
             <button type="button" class="ov-btn our" onclick="addScore('offense','Near Fall / Pin','Pin / Fall',0)">PIN</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Reversal','Reversal',2)">R2</button>
-            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
-            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
-          </div>
-          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
-            <span>Top (us) · NF PIN P</span>
-            <span style="text-align:right;">Bottom · E1 R2 P</span>
+            <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+            <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
           </div>`;
+        host.innerHTML = layoutSides(left, right, "", portrait);
         return;
       }
 
       if (pos === "top_opp") {
-        // Opp on top: NF, Pin, P | Bottom (us): E1, R2, P
-        host.innerHTML = `
-          <div class="ov-grid g2">
+        if (isInternationalStyle()) {
+          const left = [
+            { label: "R2", cls: "our", onclick: "addScore('offense','Reversal','Reversal',2)" },
+            { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+          ];
+          const right = [
+            { label: "EX2", cls: "opp", onclick: "addScore('defense','Exposure','Exposure',2)" },
+            { label: "FALL", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','Pin / Fall',0)" },
+            { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+          ];
+          const portrait = `<div class="ov-grid g2">
+              <button type="button" class="ov-btn our" onclick="addScore('offense','Reversal','Reversal',2)">R2</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Exposure','Exposure',2)">EX2</button>
+              <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+              <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Pin / Fall',0)">FALL</button>
+              <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
+            </div>`;
+          host.innerHTML = layoutSides(left, right, "", portrait);
+          return;
+        }
+        const left = [
+          { label: "E1", cls: "our", onclick: "addScore('offense','Escape','Escape',1)" },
+          { label: "R2", cls: "our", onclick: "addScore('offense','Reversal','Reversal',2)" },
+          { label: "P", cls: "our", onclick: "addPenalty('offense')" }
+        ];
+        const right = [
+          { label: "NF", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','Near Fall',0,{enterNf:1})" },
+          { label: "PIN", cls: "opp", onclick: "addScore('defense','Near Fall / Pin','Pin / Fall',0)" },
+          { label: "P", cls: "opp", onclick: "addPenalty('defense')" }
+        ];
+        const portrait = `<div class="ov-grid g2">
             <button type="button" class="ov-btn our" onclick="addScore('offense','Escape','Escape',1)">E1</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Near Fall',0,{enterNf:1})">NF</button>
             <button type="button" class="ov-btn our" onclick="addScore('offense','Reversal','Reversal',2)">R2</button>
             <button type="button" class="ov-btn opp" onclick="addScore('defense','Near Fall / Pin','Pin / Fall',0)">PIN</button>
-            <button type="button" class="ov-btn our" onclick="addScore('offense','Penalty/DQ','Penalty',1)">P</button>
-            <button type="button" class="ov-btn opp" onclick="addScore('defense','Penalty/DQ','Penalty',1)">P</button>
-          </div>
-          <div class="names-row" style="margin-top:4px;margin-bottom:0;font-size:10px;color:var(--muted);">
-            <span>Bottom (us) · E1 R2 P</span>
-            <span style="text-align:right;">Top · NF PIN P</span>
+            <button type="button" class="ov-btn our" onclick="addPenalty('offense')">P</button>
+            <button type="button" class="ov-btn opp" onclick="addPenalty('defense')">P</button>
           </div>`;
+        host.innerHTML = layoutSides(left, right, "", portrait);
         return;
       }
 
       host.innerHTML = "";
-    }
-
-    function shortName(n, fallback) {
-      n = String(n || fallback || "").trim();
-      if (n.length <= 12) return n || fallback;
-      return n.slice(0, 11) + "…";
-    }
-
-    function escHtml(s) {
-      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     }
 
     function stopRecorder() {
@@ -1017,7 +2170,7 @@
     }
 
     async function endLiveMatch() {
-      if (!confirm("End match and build package?")) return;
+      if (!confirm("End match and save?")) return;
       clearInterval(recTimer);
       const videoBlob = await stopRecorder();
       recording = false;
@@ -1026,17 +2179,19 @@
         mediaStream = null;
       }
 
-      const packageId = Math.random().toString(36).slice(2, 10);
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const safeName = (live.wrestlerName || "match").replace(/[^a-z0-9-_]+/gi, "_").slice(0, 24);
+      const packageId = uid();
+      const dateStr = live.boutMeta && live.boutMeta.date ? live.boutMeta.date : new Date().toISOString().slice(0, 10);
+      const base = matchFileBase(live.wrestlerName, live.opponent, dateStr);
+      const videoExt = (videoBlob && videoBlob.type && videoBlob.type.includes("mp4")) ? ".mp4" : ".webm";
+
       const json = {
         type: "mat-side-package",
         version: 1,
         packageId,
         matSideBuild: MAT_SIDE_BUILD,
         exportedAt: new Date().toISOString(),
-        teamName: live.teamName || (sync && sync.teamName) || "",
-        season: live.seasonMeta || (sync && sync.season) || null,
+        teamName: live.teamName || store.teamName || "",
+        season: live.seasonMeta || store.seasonMeta || null,
         bout: live.boutMeta ? {
           id: live.boutMeta.id,
           date: live.boutMeta.date,
@@ -1050,9 +2205,13 @@
           opponent: live.opponent,
           level: live.level,
           weightClass: live.weightClass,
+          style: live.style || "Folkstyle",
           date: dateStr,
           ourPoints: live.ourP,
           oppPoints: live.oppP,
+          penaltiesOur: live.penOur || 0,
+          penaltiesOpp: live.penOpp || 0,
+          dq: live.dq || null,
           source: "mat-side-live"
         },
         events: live.events.map(e => ({
@@ -1067,30 +2226,58 @@
           source: "mat-side-live"
         })),
         video: {
-          fileName: "mat-side_" + dateStr + "_" + safeName + (videoBlob && videoBlob.type.includes("mp4") ? ".mp4" : ".webm"),
+          fileName: base + videoExt,
           mimeType: videoBlob ? videoBlob.type : null,
           hasVideo: !!videoBlob
         },
-        note: "Import this JSON into Mat Scout (future Import Live Package) or manually create match and align events. Attach the video file on Scout for modifier editing."
+        naming: {
+          eventFolder: eventFolderName(
+            (live.boutMeta && (live.boutMeta.opponentTeam || live.boutMeta.type)) || "Event",
+            dateStr
+          ),
+          matchBase: base
+        },
+        note: "Import this JSON into Mat Scout. Attach the video for modifier editing."
       };
+
+      // Persist on the match in store
+      const ev = store.events.find(e => e.id === live.eventId);
+      if (ev) {
+        const m = (ev.matches || []).find(x => x.id === live.matchId);
+        if (m) {
+          m.status = "scored";
+          m.ourPoints = live.ourP;
+          m.oppPoints = live.oppP;
+          m.events = json.events;
+          m.package = json;
+          const tp = computeDualTeamPoints(live.ourP, live.oppP, json.events);
+          m.teamOur = tp.our;
+          m.teamOpp = tp.opp;
+          // Note: video blob cannot persist in localStorage; user must download
+          m.hasVideo = !!videoBlob;
+          m.videoFileName = json.video.fileName;
+        }
+      }
+      saveStore();
 
       lastPackage = {
         json,
         videoBlob,
         videoName: json.video.fileName,
-        jsonName: "mat-side_" + dateStr + "_" + safeName + ".json"
+        jsonName: base + ".json"
       };
 
       document.getElementById("done-summary").innerHTML =
-        `<strong>${live.wrestlerName}</strong> vs <strong>${live.opponent}</strong><br/>` +
+        `<strong>${escHtml(live.wrestlerName)}</strong> vs <strong>${escHtml(live.opponent)}</strong><br/>` +
         `Score ${live.ourP}–${live.oppP} · ${live.events.length} events` +
-        (videoBlob ? ` · video ${(videoBlob.size / (1024*1024)).toFixed(1)} MB` : " · no video");
+        (videoBlob ? ` · video ${(videoBlob.size / (1024 * 1024)).toFixed(1)} MB` : " · no video") +
+        `<br/><span style="font-size:11px;">Save as: ${escHtml(base)}</span>`;
 
       document.getElementById("btn-download-video").disabled = !videoBlob;
       document.getElementById("btn-download-video").style.opacity = videoBlob ? "1" : "0.4";
 
       showScreen("screen-done");
-      toast("Package ready");
+      toast("Match saved locally");
     }
 
     function downloadBlob(blob, name) {
@@ -1128,7 +2315,7 @@
       if (navigator.share && navigator.canShare && navigator.canShare({ files })) {
         try {
           await navigator.share({
-            title: "Mat Side match package",
+            title: "SW MatSide match package",
             text: (lastPackage.json.match.wrestlerName || "Match") + " live package",
             files
           });
@@ -1137,22 +2324,156 @@
           if (e && e.name === "AbortError") return;
         }
       }
-      alert("Share not available on this device. Use Download JSON and Download video, then upload both to Google Drive.");
+      alert("Share not available on this device. Use Download JSON and Download video, then put both in your export folder.");
     }
 
-    function resetToSetup() {
+    function afterMatchDone() {
       lastPackage = null;
-      live.events = [];
-      showScreen("screen-setup");
-      document.getElementById("preview-video").style.display = "none";
+      navStack = ["home", "event"];
+      renderEvent();
     }
 
-    // Boot
-    loadStoredSync();
+    // ─── REVIEW ─────────────────────────────────────────────────────
+    function renderReview() {
+      if (!reviewMatch) return;
+      const { event: ev, match: m } = reviewMatch;
+      document.getElementById("rev-summary").innerHTML =
+        `<strong>${escHtml(m.wrestlerName)}</strong> vs <strong>${escHtml(m.opponent)}</strong><br/>` +
+        `${escHtml(m.weightClass)} · ${escHtml(m.level)} · ${m.ourPoints}–${m.oppPoints}`;
+
+      const stats = document.getElementById("rev-stats");
+      const cats = {};
+      (m.events || []).forEach(e => {
+        const k = (e.direction === "offense" ? "Us: " : "Opp: ") + (e.move || e.category);
+        cats[k] = (cats[k] || 0) + 1;
+      });
+      stats.innerHTML = Object.keys(cats).length
+        ? Object.entries(cats).map(([k, v]) =>
+            `<div class="stat-row"><span>${escHtml(k)}</span><span>${v}</span></div>`
+          ).join("")
+        : `<p class="muted">No scoring events recorded.</p>`;
+
+      const log = document.getElementById("rev-log");
+      log.innerHTML = (m.events || []).map(e =>
+        `${escHtml(e.timestamp || "")} ${escHtml(e.period || "")} ${escHtml(e.direction === "offense" ? "US" : "OPP")} ${escHtml(e.move || e.category)} ${e.points ? "+" + e.points : ""}`
+      ).join("<br/>") || "—";
+
+      // Video not available after refresh; only if still in lastPackage for same match
+      const vidBtn = document.getElementById("rev-dl-video");
+      if (lastPackage && lastPackage.videoBlob && lastPackage.json &&
+          lastPackage.json.match && lastPackage.json.match.wrestlerName === m.wrestlerName) {
+        vidBtn.style.display = "block";
+      } else {
+        vidBtn.style.display = "none";
+      }
+
+      showScreen("screen-review");
+    }
+
+    function downloadPackageJsonFromReview() {
+      if (!reviewMatch || !reviewMatch.match.package) {
+        return alert("No package data stored for this match.");
+      }
+      const pkg = reviewMatch.match.package;
+      const dateStr = pkg.match && pkg.match.date ? pkg.match.date : (reviewMatch.event.date || "");
+      const base = matchFileBase(
+        reviewMatch.match.wrestlerName,
+        reviewMatch.match.opponent,
+        dateStr
+      );
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" });
+      downloadBlob(blob, base + ".json");
+      toast("JSON downloaded");
+    }
+
+    function downloadPackageVideoFromReview() {
+      if (lastPackage && lastPackage.videoBlob) {
+        downloadBlob(lastPackage.videoBlob, lastPackage.videoName);
+        toast("Video downloaded");
+      } else {
+        alert("Video is only available until you leave this session. Re-score or keep the file from the save screen.");
+      }
+    }
+
+    // ─── ADMIN ──────────────────────────────────────────────────────
+    function updateAdminUI() {
+      const status = document.getElementById("admin-roster-status");
+      if (store.roster && store.roster.length) {
+        status.innerHTML = `<span style="color:var(--green);">Loaded:</span> ${store.roster.length} athletes` +
+          (store.teamName ? " · " + escHtml(store.teamName) : "");
+      } else {
+        status.textContent = "No team roster imported yet.";
+      }
+      document.getElementById("admin-export-path").value = store.exportPath || "";
+      document.getElementById("admin-data-info").textContent =
+        store.events.length + " event(s) stored · " +
+        store.events.reduce((n, e) => n + (e.matches || []).filter(m => m.status === "scored").length, 0) + " scored matches";
+      document.getElementById("admin-build").textContent = "Build " + MAT_SIDE_BUILD;
+    }
+
+    document.getElementById("admin-roster-file").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const parsed = parseMatScoutPayload(data);
+        store.roster = (parsed.roster || []).filter(w => !w.quit);
+        if (parsed.teamName) store.teamName = parsed.teamName;
+        if (parsed.seasonMeta) store.seasonMeta = parsed.seasonMeta;
+        saveStore();
+        updateAdminUI();
+        toast("Roster imported (" + store.roster.length + ")");
+      } catch (err) {
+        alert("Could not import: " + (err.message || err));
+      }
+      e.target.value = "";
+    });
+
+    function clearAdminRoster() {
+      if (!confirm("Clear team roster?")) return;
+      store.roster = [];
+      saveStore();
+      updateAdminUI();
+      toast("Roster cleared");
+    }
+
+    function saveExportPath() {
+      store.exportPath = document.getElementById("admin-export-path").value.trim();
+      saveStore();
+      toast("Export location saved");
+    }
+
+    function exportAllLocalData() {
+      const blob = new Blob([JSON.stringify({ type: "sw-matside-backup", version: 1, exportedAt: new Date().toISOString(), store }, null, 2)], { type: "application/json" });
+      downloadBlob(blob, "sw-matside-backup_" + new Date().toISOString().slice(0, 10) + ".json");
+      toast("Backup downloaded");
+    }
+
+    function clearAllEvents() {
+      if (!confirm("Delete all events and match scores? Roster is kept.")) return;
+      store.events = [];
+      saveStore();
+      updateAdminUI();
+      toast("Events cleared");
+    }
+
+    // ─── Orientation ────────────────────────────────────────────────
+    window.addEventListener("orientationchange", () => { try { renderOverlayControls(); } catch (e) {} });
+    window.addEventListener("resize", () => {
+      clearTimeout(window._msOrientT);
+      window._msOrientT = setTimeout(() => { try { renderOverlayControls(); } catch (e) {} }, 150);
+    });
+
+    // ─── Boot ───────────────────────────────────────────────────────
+    loadStore();
     document.getElementById("top-meta").title = "Build " + MAT_SIDE_BUILD;
-    const dateEl = document.getElementById("custom-date");
-    if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
-    setSetupMode(sync && sync.season ? "import" : "custom");
+    // Live watermark (white/gold on dark video)
+    const wm = document.getElementById("live-watermark");
+    if (wm) {
+      wm.innerHTML = swLogoImg();
+    }
+    renderHome();
   </script>
 </body>
 </html>
